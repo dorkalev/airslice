@@ -1511,12 +1511,16 @@ function wallCard(r) {
 }
 
 function clipUrl(path) {
-  // /c/<leaf> is server-rendered with OpenGraph tags (rich unfurls) and
-  // redirects humans to the in-app modal. Falls back to ?clip= on localhost.
+  // Pretty share URL: /c/[<name>-]<score>-<ts36>, server-rendered with OpenGraph
+  // tags (rich unfurls) and resolved back to the clip via a prefix lookup.
+  // Falls back to ?clip= on localhost (the function isn't running there).
   const leaf = path.replace(/^runs\//, '');
   if (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     return `${location.origin}/?clip=${encodeURIComponent(path)}`;
-  return `${location.origin}/c/${encodeURIComponent(leaf)}`;
+  const p = parseRunName(leaf);
+  if (!p) return `${location.origin}/c/${encodeURIComponent(leaf)}`;   // unparseable → raw
+  const nm = p.player ? p.player + '-' : '';
+  return `${location.origin}/c/${nm}${p.score}-${p.ts.toString(36)}`;
 }
 function flashBtn(btn, txt) {
   if (!btn) return; const t = btn.textContent; btn.textContent = txt;
@@ -1540,7 +1544,12 @@ async function shareRun(path, score, btn) {
 // The modal is a real history entry: opening pushes ?clip=<path> so the URL
 // reflects what's on screen and the browser Back button closes the modal.
 let currentClipPath = null, currentClipScore = 0;
-const clipQS = (path) => location.pathname + '?clip=' + encodeURIComponent(path) + (USE_EMULATOR ? '&emu=1' : '');
+// Address-bar URL for an open clip. On prod this is the crawlable /c/<leaf>
+// URL, so copying it straight from the address bar still unfurls with the
+// clip's score + thumbnail. On the emulator keep ?clip= (the function isn't up).
+const clipQS = (path) => USE_EMULATOR
+  ? location.pathname + '?clip=' + encodeURIComponent(path) + '&emu=1'
+  : clipUrl(path);
 const baseQS = () => location.pathname + (USE_EMULATOR ? '?emu=1' : '');
 
 async function openClip(path, push = true) {
