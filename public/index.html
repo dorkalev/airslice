@@ -134,33 +134,54 @@
   #mute:hover, #wallbtn:hover { background: #000000aa; border-color: #ffffff44; }
   .hint-line { font-size: 11px; color: #778; margin-top: 18px; }
 
-  /* boot leaderboard preview — makes it obvious clips are captured & public */
-  .wallpreview { margin-top: 22px; }
-  .wp-head { font-size: 11px; color: #9aa; letter-spacing: .04em; margin-bottom: 12px; }
-  .wp-head b { color: var(--cyan); font-weight: 400; }
-  .wp-strip { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-  .wp-card {
-    position: relative; width: 148px; border-radius: 12px; overflow: hidden;
-    background: #000; border: 1px solid #ffffff1c;
-    box-shadow: 0 8px 26px #0008;
+  /* home leaderboard ("The Wall") — full, infinite-scroll, on the main page */
+  .wall { margin-top: 26px; width: min(1000px, 92vw); }
+  .wall-head { font-size: 12px; color: #9aa; letter-spacing: .04em; margin-bottom: 14px; }
+  .wall-head b { color: var(--cyan); font-weight: 400; }
+  .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .run {
+    background: #12121e; border: 1px solid #ffffff14; border-radius: 14px;
+    overflow: hidden; position: relative; transition: transform .15s, box-shadow .15s;
   }
-  .wp-card video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: #12121e; }
-  .wp-card .wp-badge {
-    position: absolute; left: 0; right: 0; bottom: 0;
-    display: flex; align-items: baseline; gap: 6px; padding: 5px 8px;
-    background: linear-gradient(transparent, #000c 40%);
-    font-family: 'Bangers', cursive; letter-spacing: .04em;
+  .run:hover { transform: translateY(-3px); box-shadow: 0 14px 40px #000a, 0 0 30px #29f4ff22; }
+  .run .meta { padding: 9px 12px 11px; display: flex; align-items: baseline; gap: 9px; text-align: left; }
+  .rank { font-family: 'Bangers', cursive; font-size: 26px; color: #9aa; min-width: 38px; }
+  .run.top1 .rank { color: #ffd24f; text-shadow: 2px 2px 0 #8a6b0e; }
+  .run.top2 .rank { color: #cfd6e0; text-shadow: 2px 2px 0 #5a616b; }
+  .run.top3 .rank { color: #e09a5a; text-shadow: 2px 2px 0 #6b4a2a; }
+  .pts { font-family: 'Bangers', cursive; font-size: 30px; color: var(--cyan); text-shadow: 2px 2px 0 #0b4a7a; }
+  .pts small { font-size: 13px; color: #9aa; text-shadow: none; }
+  .stats { margin-left: auto; text-align: right; font-size: 9px; color: #778; line-height: 1.6; }
+  .crown { position: absolute; top: 8px; left: 10px; font-size: 24px; filter: drop-shadow(0 2px 6px #000); z-index: 2; }
+  .vidwrap { position: relative; }
+  .vidwrap video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: #000; }
+  .vidwrap .poster {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    background: linear-gradient(135deg, #16162a, #0c0c16); color: #4a5568; font-size: 26px;
+    pointer-events: none; transition: opacity .2s;
   }
-  .wp-card .wp-rank { color: #ffd24f; font-size: 15px; }
-  .wp-card.r2 .wp-rank { color: #cfd6e0; } .wp-card.r3 .wp-rank { color: #e09a5a; }
-  .wp-card .wp-pts { color: var(--cyan); font-size: 19px; }
-  .wp-card .wp-pts small { font-size: 10px; color: #9aa; }
+  .vidwrap.playing .poster { opacity: 0; }
+  .run:not(.autoplay) .vidwrap::after {
+    content: 'hover ▸'; position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; color: #9aa; background: #000000aa; padding: 2px 7px; border-radius: 6px;
+    pointer-events: none; transition: opacity .2s;
+  }
+  .run.autoplay .vidwrap::after, .vidwrap.playing::after { opacity: 0; }
   .wp-live {
     position: absolute; top: 6px; right: 6px; z-index: 2;
     font: 700 8px/1 'Fragment Mono', monospace; letter-spacing: .12em;
     background: #ff2e88; color: #fff; padding: 3px 5px; border-radius: 4px;
   }
-  .wp-all { display: inline-block; margin-top: 14px; font-size: 12px; color: var(--cyan); }
+  .rm {
+    position: absolute; top: 8px; right: 8px; z-index: 3;
+    font-family: 'Fragment Mono', monospace; font-size: 10px;
+    background: #000000cc; color: #ff8aa8; border: 1px solid #ff2e8855;
+    border-radius: 8px; padding: 5px 9px; cursor: pointer;
+  }
+  .rm:hover { background: #7a0b3d; color: #fff; }
+  #sentinel { height: 30px; }
+  #more { color: #778; font-size: 12px; padding: 16px 0 4px; min-height: 20px; }
+  #more.err { color: var(--hot); }
 </style>
 </head>
 <body>
@@ -168,7 +189,7 @@
 <video id="cam" playsinline muted></video>
 <canvas id="game"></canvas>
 <button id="mute" title="sound">🔊</button>
-<a id="wallbtn" href="wall.html" title="the wall — leaderboard">🏆</a>
+<a id="wallbtn" title="the wall — leaderboard" style="cursor:pointer">🏆</a>
 
 <!-- ============ BOOT ============ -->
 <div class="overlay" id="boot">
@@ -184,13 +205,14 @@
     </div>
     <div id="boot-status">on-device hand tracking · LiteRT.js · video uploads ONLY if you post your run</div>
 
-    <div class="wallpreview" id="wallpreview" style="display:none">
-      <div class="wp-head">🏆 ON THE WALL — <b>real players, real webcam clips.</b> post yours and you're here too.</div>
-      <div class="wp-strip" id="wp-strip"></div>
-      <a class="wp-all" href="wall.html">see the full leaderboard →</a>
-    </div>
-
     <div class="privacy">POWERED BY <b>LiteRT.js</b> (WebGPU) + 21-POINT HAND TRACKING · GAME AI RUNS 100% IN YOUR BROWSER</div>
+
+    <div class="wall" id="wall">
+      <div class="wall-head">🏆 THE WALL — <b>real players, real webcam clips.</b> post your run and you're here too.</div>
+      <div class="board" id="board"></div>
+      <div id="sentinel"></div>
+      <div id="more"></div>
+    </div>
   </div>
 </div>
 
@@ -220,7 +242,7 @@
       <div class="btnrow" style="margin-top:10px">
         <button class="btn pink small" id="upload"><span class="lbl">POST TO THE WALL 📼</span> <span class="dwell"></span></button>
         <a class="btn alt" id="dl" download="airslice-run.webm">save clip</a>
-        <a class="btn alt" href="wall.html">the wall 🏆</a>
+        <button class="btn alt" id="seewall">the wall 🏆</button>
       </div>
       <div class="consent">POSTING PUBLISHES THIS CLIP — YOUR CAMERA FOOTAGE INCLUDED — ON THE PUBLIC WALL &amp; LEADERBOARD. YOU CAN REMOVE IT ANY TIME (FROM THIS BROWSER). <span id="up-status"></span> <a href="#" id="unpost" style="display:none;color:var(--hot)">🗑 remove it</a></div>
     </div>
@@ -235,7 +257,7 @@
 <script type="module">
 import { loadLiteRt, loadAndCompile, Tensor, isWebGPUSupported }
   from 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.2/+esm';
-import { getFirebase, listPage, getUrl, encodeRunName, rememberMine, forgetMine } from './leaderboard.js';
+import { getFirebase, listPage, getUrl, encodeRunName, rememberMine, forgetMine, isMine, deleteRun } from './leaderboard.js';
 
 const MODEL_URL = './hand_landmark_full.tflite';
 const WASM_DIR = 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.2/wasm/';
@@ -546,7 +568,8 @@ async function uploadRun() {
         status.textContent = "YOU'RE ON THE WALL 🏆 ";
         $('unpost').style.display = '';
         $('unpost').textContent = '🗑 remove it';
-        if (goWallAfterPost) setTimeout(() => { location.href = WALL_URL; }, 700);
+        refreshWall();                                   // your run now shows on the wall
+        if (goWallAfterPost) setTimeout(showWall, 700);
       });
   } catch (e) {
     console.error(e);
@@ -640,12 +663,18 @@ $('brag').onclick = copyBrag;
 // =====================================================================
 // End-run confirmation (keyboard + leaderboard icon)
 // =====================================================================
-const WALL_URL = 'wall.html' + (USE_EMULATOR ? '?emu=1' : '');
-$('wallbtn').href = WALL_URL;
 let confirmOpen = false;
 let autoPostAfterEnd = false;
 let goWallAfterPost = false;
 let confirmGoWall = false;
+
+// Bring the player to the home screen's leaderboard (single-page — no nav).
+function showWall() {
+  $('over').classList.add('gone');
+  $('confirm').classList.add('gone');
+  $('boot').classList.remove('gone');
+  requestAnimationFrame(() => $('wall').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+}
 
 function openConfirm(goWall) {
   if (state !== S.PLAY || confirmOpen) return;
@@ -666,18 +695,18 @@ function endRun(post) {
       autoPostAfterEnd = true;          // upload fires once the clip is ready
       goWallAfterPost = goWall;
     } else if (goWall) {
-      location.href = WALL_URL;         // nothing recorded — just go
-      return;
+      endGame(); showWall(); return;    // nothing recorded — just show the wall
     }
     endGame();
   } else {
     endGame();
-    if (goWall) location.href = WALL_URL;
+    if (goWall) showWall();
   }
 }
 $('c-endpost').onclick = () => endRun(true);
 $('c-end').onclick = () => endRun(false);
 $('c-cancel').onclick = () => { blip(880); closeConfirm(); };
+$('seewall').onclick = showWall;
 
 addEventListener('keydown', e => {
   if (e.repeat) return;
@@ -691,11 +720,9 @@ addEventListener('keydown', e => {
   }
 });
 
-$('wallbtn').addEventListener('click', e => {
-  if (state === S.PLAY) {
-    e.preventDefault();
-    openConfirm(true);
-  }
+$('wallbtn').addEventListener('click', () => {
+  if (state === S.PLAY) openConfirm(true);       // pause & offer to post, then land on the wall
+  else showWall();                                // already home — just scroll to it
 });
 
 // dwell-to-press for camera players on the game-over buttons
@@ -945,9 +972,16 @@ canvas.addEventListener('pointerleave', () => { pointerTip = null; });
 // =====================================================================
 // Boot
 // =====================================================================
+let engineReady = false;
 async function bootCamera() {
   const status = $('boot-status');
   status.classList.remove('err');
+  if (engineReady) {           // already initialized (returning from a prior run)
+    pointerMode = false;
+    $('boot').classList.add('gone');
+    startGame();
+    return;
+  }
   try {
     status.textContent = 'requesting camera…';
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -963,6 +997,7 @@ async function bootCamera() {
     catch { model = await loadAndCompile(MODEL_URL, { accelerator: 'wasm' }); }
     resetRoi();
     inferLoop();
+    engineReady = true;
     $('boot').classList.add('gone');
     startGame();
   } catch (e) {
@@ -974,7 +1009,7 @@ async function bootCamera() {
 $('engage').onclick = () => { audio(); bootCamera(); };
 $('pointer-mode').onclick = () => {
   audio();
-  pointerMode = true;
+  if (!engineReady) pointerMode = true;   // stay in whichever mode is live once started
   $('boot').classList.add('gone');
   startGame();
 };
@@ -982,36 +1017,107 @@ $('pointer-mode').onclick = () => {
 requestAnimationFrame(loop);
 
 // =====================================================================
-// Boot-screen leaderboard preview — shows real players' captured clips so
-// it's clear up front that posting publishes your webcam footage
+// Home leaderboard ("The Wall") — full list, infinite scroll, top-3 autoplay,
+// hover-to-load for the rest. Shows real players' clips so it's clear up front
+// that posting publishes your webcam footage.
 // =====================================================================
-async function loadWallPreview() {
+const AUTOPLAY_TOP = 3;
+const board = $('board'), moreEl = $('more'), sentinel = $('sentinel');
+let wallRank = 0, wallToken = null, wallLoading = false, wallDone = false;
+
+function wallCard(r) {
+  wallRank++;
+  const i = wallRank;
+  const auto = i <= AUTOPLAY_TOP;
+  const card = document.createElement('div');
+  card.className = 'run' + (i <= 3 ? ` top${i}` : '') + (auto ? ' autoplay' : '');
+  card.innerHTML = `
+    ${i === 1 ? '<div class="crown">👑</div>' : ''}
+    <div class="vidwrap"><div class="poster">${auto ? '▶' : '🍉'}</div>
+      <video preload="none" playsinline loop muted ${auto ? '' : 'controls'}></video></div>
+    <div class="meta">
+      <span class="rank">#${i}</span>
+      <span class="pts">${r.score}<small> pts</small></span>
+      <span class="stats">${r.sliced} sliced<br>combo x${r.combo}</span>
+    </div>`;
+  const wrap = card.querySelector('.vidwrap');
+  const vid = card.querySelector('video');
+  let urlP = null;
+  const ensureUrl = () => (urlP ||= getUrl(r.item).then(u => { vid.src = u; return u; }).catch(() => { urlP = null; }));
+  if (auto) {
+    ensureUrl().then(() => vid.play().catch(() => {}));
+    vid.addEventListener('playing', () => wrap.classList.add('playing'), { once: true });
+  } else {
+    const enter = async () => { await ensureUrl(); try { await vid.play(); wrap.classList.add('playing'); } catch {} };
+    wrap.addEventListener('mouseenter', enter);
+    wrap.addEventListener('mouseleave', () => vid.pause());
+    wrap.addEventListener('click', () => { if (vid.paused) enter(); });
+  }
+  if (isMine(r.path)) {
+    const rm = document.createElement('button');
+    rm.className = 'rm';
+    rm.textContent = '🗑 my run — remove';
+    let armed = 0;
+    rm.onclick = async (e) => {
+      e.stopPropagation();
+      if (Date.now() - armed > 3000) {
+        armed = Date.now();
+        rm.textContent = 'SURE? click again 🗑';
+        setTimeout(() => { rm.isConnected && (rm.textContent = '🗑 my run — remove'); }, 3000);
+        return;
+      }
+      try { rm.textContent = 'removing…'; await deleteRun(r.item); forgetMine(r.path); card.remove(); }
+      catch (err) { rm.textContent = 'failed: ' + (err.code || err.message); }
+    };
+    card.appendChild(rm);
+  }
+  board.appendChild(card);
+}
+
+async function loadMoreWall() {
+  if (wallLoading || wallDone) return;
+  wallLoading = true;
+  moreEl.textContent = 'loading…';
   try {
-    const { runs } = await listPage(USE_EMULATOR, { pageSize: 4 });
-    if (!runs.length) { window.__wallPreviewCount = 0; return; }
-    const strip = $('wp-strip');
-    strip.innerHTML = '';
-    for (let i = 0; i < runs.length; i++) {
-      const r = runs[i];
-      const card = document.createElement('div');
-      card.className = 'wp-card' + (i < 3 ? ` r${i + 1}` : '');
-      card.innerHTML = `
-        <span class="wp-live">● REC</span>
-        <video muted loop playsinline preload="metadata"></video>
-        <div class="wp-badge"><span class="wp-rank">#${i + 1}</span><span class="wp-pts">${r.score}<small> pts</small></span></div>`;
-      const vid = card.querySelector('video');
-      getUrl(r.item).then(u => { vid.src = u; vid.play().catch(() => {}); }).catch(() => {});
-      card.addEventListener('click', () => { location.href = WALL_URL; });
-      strip.appendChild(card);
-    }
-    $('wallpreview').style.display = '';
-    window.__wallPreviewCount = runs.length;
+    const { runs, nextPageToken } = await listPage(USE_EMULATOR, { pageToken: wallToken, pageSize: 12 });
+    runs.forEach(wallCard);
+    wallToken = nextPageToken;
+    if (wallRank === 0) { moreEl.textContent = 'the wall is empty — be the first name on it 🏆'; wallDone = true; }
+    else if (!wallToken) { moreEl.textContent = "that's the whole wall 🏁"; wallDone = true; }
+    else moreEl.textContent = '';
   } catch (e) {
-    console.warn('wall preview unavailable', e);
-    window.__wallPreviewCount = 0;
+    console.error(e);
+    moreEl.className = 'err';
+    moreEl.textContent = 'the wall is unreachable right now (' + (e.code || e.message) + ')';
+    wallDone = true;
+  } finally {
+    wallLoading = false;
   }
 }
-loadWallPreview();
+
+// keep loading while the sentinel stays visible (covers short pages)
+let sentinelVisible = false, pumping = false;
+async function pumpWall() {
+  if (pumping) return;
+  pumping = true;
+  while (sentinelVisible && !wallLoading && !wallDone) await loadMoreWall();
+  pumping = false;
+}
+new IntersectionObserver(entries => {
+  sentinelVisible = entries[0].isIntersecting;
+  if (sentinelVisible) pumpWall();
+}, { root: $('boot'), rootMargin: '500px' }).observe(sentinel);
+
+// reset + reload from the top (after a fresh post, or first load)
+async function refreshWall() {
+  board.innerHTML = '';
+  wallRank = 0; wallToken = null; wallLoading = false; wallDone = false;
+  moreEl.className = '';
+  await loadMoreWall();
+  pumpWall();
+  window.__wallRank = () => wallRank;
+}
+refreshWall();
 
 // debug/testing handle (read-only)
 Object.defineProperty(window, '__airslice', {

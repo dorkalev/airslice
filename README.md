@@ -7,8 +7,8 @@ tracking runs **100% on-device in the browser** via
 (WebGPU, with a WASM/XNNPACK fallback). Nothing about your camera leaves the
 machine unless *you* choose to post a clip to the leaderboard.
 
-▶️ **Play:** https://dorkalev-website.web.app/airslice/
-🏆 **The Wall (leaderboard):** https://dorkalev-website.web.app/airslice/wall.html
+▶️ **Play (with the 🏆 leaderboard right on the page):**
+https://dorkalev-website.web.app/airslice/
 
 ## How it plays
 
@@ -39,13 +39,16 @@ webcam ─▶ ROI crop 224×224 ─▶ LiteRT.js (hand_landmark_full.tflite)
 
 ```
 public/
-  index.html         the game
-  wall.html          the leaderboard ("The Wall")
+  index.html         the game + the leaderboard ("The Wall"), one page
   leaderboard.js     shared Firebase + run data layer
   hand_landmark_full.tflite   MediaPipe hand model (Apache-2.0)
 firebase.json        hosting + storage rules + emulator config
 storage.rules        Storage security rules
 ```
+
+The leaderboard lives on the home screen (below the start buttons) and uses
+paginated infinite scroll — the top 3 runs autoplay, the rest load their video
+on hover. The 🏆 button and the post-game screen scroll you to it.
 
 ## Run it yourself
 
