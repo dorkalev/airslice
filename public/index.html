@@ -4,14 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <script>
-// Canonical-domain guard: funnel stray domains to the real home, keeping the
-// full route (path + query + hash). Runs before anything loads.
-// CANON = '' disables it (open-source forks). ALLOW keeps the game reachable on
-// the project's own hosting + local dev — remove 'airslice-5b3e3.web.app' once
-// airslice.dorkalev.com DNS is live to funnel that too.
+// Optional canonical-domain guard: set CANON to your domain to funnel stray
+// hosts to it (keeping the full route). Blank = disabled. Add any extra hosts
+// that should NOT be redirected (project hosting, staging) to ALLOW.
 (function () {
-  var CANON = ''; // set to your own domain to enforce a canonical host
-  var ALLOW = [CANON, 'airslice-5b3e3.web.app', 'localhost', '127.0.0.1'];
+  var CANON = ''; // e.g. 'yourgame.example.com'
+  var ALLOW = [CANON, 'localhost', '127.0.0.1'];
   if (CANON && ALLOW.indexOf(location.hostname) < 0) {
     location.replace('https://' + CANON + location.pathname + location.search + location.hash);
   }
