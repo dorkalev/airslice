@@ -402,7 +402,71 @@ function blip(freq = 880, dur = 0.08, vol = 0.25) {
   g.gain.exponentialRampToValueAtTime(0.01, t + dur);
   o.connect(g).connect(ac.destination); o.start(); o.stop(t + dur + 0.02);
 }
-$('mute').onclick = () => { muted = !muted; $('mute').textContent = muted ? '🔇' : '🔊'; };
+
+// ---- generative background music (no assets): looping bass + arpeggio + hat ----
+let musicGain = null;
+const music = (() => {
+  const BPM = 128, SIXTEENTH = 60 / BPM / 4;
+  // 4-bar minor progression (Am – F – C – G): arpeggio notes + bass root (Hz)
+  const CHORDS = [
+    [220.00, 261.63, 329.63], [174.61, 220.00, 261.63],
+    [261.63, 329.63, 392.00], [196.00, 246.94, 293.66],
+  ];
+  const BASS = [110.00, 87.31, 130.81, 98.00];
+  let playing = false, timer = null, step = 0, nextTime = 0;
+  function bus() {
+    if (!musicGain) { musicGain = AC.createGain(); musicGain.gain.value = 0.22; musicGain.connect(AC.destination); }
+    return musicGain;
+  }
+  function tone(freq, t, dur, type, vol) {
+    const o = AC.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t);
+    const g = AC.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(bus()); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function hat(t) {
+    const buf = AC.createBuffer(1, AC.sampleRate * 0.03, AC.sampleRate);
+    const d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const s = AC.createBufferSource(); s.buffer = buf;
+    const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7000;
+    const g = AC.createGain(); g.gain.setValueAtTime(0.06, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+    s.connect(hp).connect(g).connect(bus()); s.start(t);
+  }
+  function schedule() {
+    if (!playing) return;
+    while (nextTime < AC.currentTime + 0.13) {
+      const bar = Math.floor(step / 16) % 4, s = step % 16, ch = CHORDS[bar];
+      if (s % 2 === 0) tone(ch[(s / 2) % 3] * 2, nextTime, 0.12, 'square', 0.05);  // arpeggio (8ths)
+      if (s % 4 === 0) tone(BASS[bar], nextTime, 0.24, 'triangle', 0.13);           // bass (beats)
+      if (s % 4 === 2) hat(nextTime);                                               // offbeat hat
+      nextTime += SIXTEENTH; step++;
+    }
+  }
+  return {
+    start() {
+      if (playing || muted) return;
+      audio(); playing = true; step = 0; nextTime = AC.currentTime + 0.06;
+      bus().gain.cancelScheduledValues(AC.currentTime);
+      bus().gain.setValueAtTime(0.0001, AC.currentTime);
+      bus().gain.linearRampToValueAtTime(0.22, AC.currentTime + 0.6);
+      timer = setInterval(schedule, 25); schedule();
+    },
+    stop() {
+      if (!playing) return; playing = false;
+      clearInterval(timer); timer = null;
+      try { bus().gain.linearRampToValueAtTime(0.0001, AC.currentTime + 0.25); } catch {}
+    },
+  };
+})();
+
+$('mute').onclick = () => {
+  muted = !muted;
+  $('mute').textContent = muted ? '🔇' : '🔊';
+  if (muted) music.stop();
+  else if (state === S.PLAY || state === S.COUNTDOWN) music.start();
+};
 
 // =====================================================================
 // Hand tracking (LiteRT.js) — same engine as the AIR·HAND demo
@@ -769,6 +833,7 @@ function startGame() {
   $('unpost').style.display = 'none';
   $('replaybox').style.display = 'none';
   $('over').classList.add('gone');
+  music.start();   // startGame is only ever reached from a click/tap → gesture-safe
 }
 
 function capturePoster() {
@@ -786,6 +851,7 @@ function endGame() {
   capturePoster();                 // instant static thumbnail (before state changes the canvas)
   previewPromise = buildPreview();  // ~2s: re-encode sampled frames into an animated loop
   state = S.OVER;
+  music.stop();
   finalStats = { score, sliced: slicedTotal, combo: bestCombo || 1 };
   stopRecording();
   boom();
@@ -1282,10 +1348,18 @@ $('clip-close').onclick = closeClip;                              // ✕
 $('clip-back').onclick = () => { closeClip(); showWall(); };       // ◂ back to the wall
 $('clip-copy').onclick = () => { if (currentClipPath) copyPermalink(currentClipPath, $('clip-copy')); };
 $('clip-share').onclick = () => { if (currentClipPath) shareRun(currentClipPath, currentClipScore, $('clip-share')); };
-$('clip-play').onclick = () => {   // close modal + jump to the start screen (top of home)
+$('clip-play').onclick = () => {   // PLAY = start a run now (this click is the gesture)
   closeClip();
   $('over').classList.add('gone');
-  const b = $('boot'); b.classList.remove('gone'); b.scrollTo({ top: 0, behavior: 'smooth' });
+  $('confirm').classList.add('gone');
+  if (engineReady || pointerMode) {
+    // a mode is already active this session → start immediately (like "again")
+    $('boot').classList.add('gone');
+    startGame();
+  } else {
+    // cold visitor (e.g. arrived via permalink) — needs to pick camera/mouse first
+    const b = $('boot'); b.classList.remove('gone'); b.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 };
 if (QP.get('clip')) openClip(QP.get('clip'));
 
@@ -1346,6 +1420,7 @@ Object.defineProperty(window, '__airslice', {
     get uploaded() { return uploaded; },
     get timeLeft() { return timeLeft; },
     get confirmOpen() { return confirmOpen; },
+    get audioState() { return AC ? AC.state : 'none'; },
   },
 });
 </script>
