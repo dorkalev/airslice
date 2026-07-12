@@ -4,11 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <script>
-// Optional canonical-domain guard: set CANON to your domain to funnel stray
-// hosts to it (keeping the full route). Blank = disabled. Add any extra hosts
-// that should NOT be redirected (project hosting, staging) to ALLOW.
+// Canonical-domain guard: funnel every other host (incl. airslice-5b3e3.web.app)
+// to airslice.dorkalev.com, keeping the full route (path + query + hash).
+// localhost stays allow-listed for dev. CANON = '' disables it (OSS forks).
 (function () {
-  var CANON = ''; // e.g. 'yourgame.example.com'
+  var CANON = ''; // set to your own domain to enforce a canonical host
   var ALLOW = [CANON, 'localhost', '127.0.0.1'];
   if (CANON && ALLOW.indexOf(location.hostname) < 0) {
     location.replace('https://' + CANON + location.pathname + location.search + location.hash);
@@ -521,10 +521,11 @@ function segDist(px, py, qx, qy, cx, cy) {
 }
 
 // ---- run recording (composited canvas = camera + game) ----
-// recorded from a downscaled mirror canvas (max 640px wide) at a modest
-// bitrate so a 60s run stays in the single-digit-MB range
-const REC_MAX_WIDTH = 640;
-const REC_BITRATE = 1_200_000;
+// recorded from a downscaled mirror canvas at a modest bitrate — the wall shows
+// clips in small cards, so 480p is plenty and keeps a 60s run ~4 MB
+// (smaller = faster to load and cheaper egress)
+const REC_MAX_WIDTH = 480;
+const REC_BITRATE = 800_000;
 let recorder = null, recordedBlob = null, recordedExt = 'webm';
 let recCanvas = null, recCtx = null;
 let uploading = false, uploaded = false, uploadedPath = null;
@@ -1066,7 +1067,7 @@ requestAnimationFrame(loop);
 // hover-to-load for the rest. Shows real players' clips so it's clear up front
 // that posting publishes your webcam footage.
 // =====================================================================
-const AUTOPLAY_TOP = 3;
+const AUTOPLAY_TOP = 1;  // only the champion autoplays; the rest load on hover (speed + egress)
 const board = $('board'), moreEl = $('more'), sentinel = $('sentinel');
 let wallRank = 0, wallToken = null, wallLoading = false, wallDone = false;
 
@@ -1091,11 +1092,13 @@ function wallCard(r) {
   // resolve the download URL up front (cheap; sets src with preload=none so NO
   // video bytes are fetched until play) → hover starts instantly, no round-trip
   const ensureUrl = () => (urlP ||= getUrl(r.item).then(u => { vid.src = u; return u; }).catch(() => { urlP = null; }));
-  ensureUrl();
   if (auto) {
-    vid.play().catch(() => {});
+    // play only AFTER the src is set (ensureUrl is async) — playing an empty
+    // element is a no-op and leaves the video stuck idle
+    ensureUrl().then(() => vid.play().catch(() => {}));
     vid.addEventListener('playing', () => wrap.classList.add('playing'), { once: true });
   } else {
+    ensureUrl();  // prefetch the URL (preload=none → no bytes) so hover is instant
     const enter = async () => { await ensureUrl(); try { await vid.play(); wrap.classList.add('playing'); } catch {} };
     wrap.addEventListener('mouseenter', enter);
     wrap.addEventListener('mouseleave', () => vid.pause());
