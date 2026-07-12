@@ -33,10 +33,18 @@ exports.notifyOnUpload = onObjectFinalized(
     const owner = (event.data.metadata && event.data.metadata.owner) || "";
     const leaf = path.slice(5);
 
+    // Only our ranked runs count/notify. Anything else in runs/ is anomalous
+    // (the client only ever writes this format) → ignore it entirely.
+    const m = leaf.match(/^(\d{7})_(\d{13})_(\d+)f_x(\d+)(?:_n([a-z0-9]{1,12}))?\./);
+    if (!m) { logger.warn(`ignoring unranked run name: ${leaf}`); return; }
+
     // ---- server-side rate limit (per uploader per UTC day) ----
-    if (owner) {
+    // The Storage rule requires metadata.owner == uid on create, so owner is
+    // present for every legit upload; a "noowner" fallback caps anything that
+    // somehow slips through rather than letting it past unmetered.
+    {
       const day = new Date(event.data.timeCreated || Date.now()).toISOString().slice(0, 10);
-      const counter = bucket().file(`counters/${owner}_${day}`);
+      const counter = bucket().file(`counters/${owner || "noowner"}_${day}`);
       const n = (await readCount(counter)) + 1;
       try { await counter.save(String(n), { contentType: "text/plain", resumable: false }); } catch (e) { logger.error("counter write", e); }
       if (n > DAILY_CAP) {
@@ -47,17 +55,16 @@ exports.notifyOnUpload = onObjectFinalized(
           bucket().file(`posters/${base}.jpg`).delete(),
           bucket().file(`previews/${leaf}`).delete(),
         ]);
-        logger.warn(`rate limit: ${owner} over ${DAILY_CAP}/day — deleted ${path}`);
+        logger.warn(`rate limit: ${owner || "noowner"} over ${DAILY_CAP}/day — deleted ${path}`);
         return;
       }
     }
 
     // ---- notify ----
-    const m = leaf.match(/^(\d{7})_(\d{13})_(\d+)f_x(\d+)(?:_n([a-z0-9]{1,12}))?\./);
-    const score = m ? 9999999 - parseInt(m[1], 10) : "?";
-    const sliced = m ? m[3] : "?";
-    const combo = m ? m[4] : "?";
-    const who = m && m[5] ? ` by @${m[5]}` : "";
+    const score = 9999999 - parseInt(m[1], 10);
+    const sliced = m[3];
+    const combo = m[4];
+    const who = m[5] ? ` by @${m[5]}` : "";
     const sizeMB = event.data.size ? (Number(event.data.size) / 1048576).toFixed(1) : "?";
     const msg = `🍉 New AIRSLICE run${who}: ${score} pts (${sliced} sliced, combo x${combo}) · ${sizeMB} MB`;
 
@@ -101,7 +108,7 @@ exports.clipPage = onRequest({ region: "us-central1", memory: "256MiB" }, async 
 
   const title = `${score} pts on AIRSLICE 🍉`;
   const desc = `${who} sliced ${sliced} fruit (combo x${combo}) with their bare hands — think you can beat it?`;
-  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   const vtype = m[6] === "mp4" ? "video/mp4" : "video/webm";
 
   res.set("Cache-Control", "public, max-age=3600");

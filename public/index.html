@@ -21,6 +21,14 @@
 <meta name="twitter:title" content="AIRSLICE — slice fruit with your bare hands">
 <meta name="twitter:description" content="Slice flying fruit in mid-air with your bare hands — your webcam is the controller.">
 <meta name="twitter:image" content="https://YOUR_DOMAIN/og.png">
+<!-- Google Analytics (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-XXXXXXXXXX');
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Fragment+Mono&display=swap" rel="stylesheet">
@@ -102,24 +110,64 @@
 
   .privacy { margin-top: 22px; font-size: 10px; color: #667; letter-spacing: .06em; }
   .privacy b { color: #9aa; font-weight: 400; }
+  .privacy a { color: var(--cyan); text-decoration: none; }
+  .privacy a b { color: var(--cyan); }
+  .privacy a:hover { text-decoration: underline; }
 
   #boot-status { margin-top: 14px; font-size: 11px; color: #9aa; min-height: 16px; }
   #boot-status.err { color: var(--hot); }
 
   .replaybox { margin: 4px 0 14px; }
+  /* clean posting column: just name entry, one clear POST, a quiet skip */
+  .postbox { display: flex; flex-direction: column; align-items: center; gap: 13px; width: min(92vw, 320px); margin: 14px auto 0; }
+  .postbtn {
+    width: 100%; font-size: 23px; letter-spacing: .03em;
+    padding: 16px 18px; transform: none; white-space: nowrap;
+  }
+  .postbtn:hover { transform: scale(1.02); }
+  .postbtn:active { transform: translateY(3px); box-shadow: 0 2px 0 #7a0b3d, 0 0 40px #ff2e8844; }
+  .skiplink {
+    background: none; border: 0; cursor: pointer; padding: 2px 6px;
+    font-family: 'Fragment Mono', monospace; font-size: 12px; letter-spacing: .03em;
+    color: #5a6472; text-decoration: underline; text-underline-offset: 3px;
+  }
+  .skiplink:hover { color: #8a94a5; }
   .replaybox video {
     width: min(46vw, 360px); max-height: 24vh;
     border-radius: 12px; border: 2px solid #ffffff22;
     box-shadow: 0 10px 40px #000a; background: #000;
   }
   .btn.small { font-size: 19px; padding: 10px 22px; }
-  #name-input {
-    font-family: 'Fragment Mono', monospace; font-size: 13px; text-align: center;
-    width: 150px; padding: 10px 10px; border-radius: 11px;
-    background: #0a0a12; border: 1px solid #ffffff2c; color: #fff;
+  /* retro arcade high-score name entry: real (invisible) input over a row of glowing cells */
+  .name-arcade { position: relative; display: inline-block; cursor: text; -webkit-tap-highlight-color: transparent; }
+  .name-cells { display: flex; gap: clamp(4px, 1.4vw, 7px); justify-content: center; }
+  .name-cells .cell {
+    width: clamp(22px, 7.4vw, 30px); height: clamp(32px, 10vw, 40px);
+    border-radius: 8px; background: #0a0a12; border: 2px solid #ffffff1f;
+    display: grid; place-items: center; overflow: hidden;
+    font-family: 'Bangers', cursive; font-size: clamp(20px, 6.4vw, 26px);
+    color: var(--cyan); text-shadow: 0 0 10px #29f4ff77;
+    transition: border-color .12s, box-shadow .12s, transform .12s, background .12s;
   }
-  #name-input:focus { outline: none; border-color: var(--cyan); }
-  #name-input::placeholder { color: #667; }
+  .name-cells .cell.filled { border-color: #29f4ff5c; background: #0c1420; }
+  .name-cells .cell.active {
+    border-color: var(--cyan); background: #0c1622;
+    box-shadow: 0 0 0 2px #29f4ff3d, 0 0 16px #29f4ff66; transform: translateY(-2px);
+  }
+  .name-cells .cell .caret {
+    width: 2px; height: 58%; background: var(--cyan);
+    box-shadow: 0 0 8px var(--cyan); animation: caretblink 1.05s steps(1) infinite;
+  }
+  @keyframes caretblink { 50% { opacity: 0; } }
+  .name-arcade input {
+    position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0;
+    border: 0; background: transparent; color: transparent;
+    font-size: 16px;                 /* 16px keeps iOS from zooming on focus */
+    letter-spacing: 1em; caret-color: transparent; cursor: text; outline: none;
+    text-transform: uppercase;
+  }
+  .name-cap { font-size: 10px; letter-spacing: .14em; color: #7a869a; margin-top: 7px; text-transform: uppercase; }
+  .name-cap b { color: var(--cyan); font-weight: 400; }
   .consent {
     font-size: 9.5px; color: #778; letter-spacing: .08em;
     margin: 8px auto 0; max-width: 480px; line-height: 1.6;
@@ -285,9 +333,9 @@
       <button class="btn" id="engage">GIMME THE BLADE ▸</button>
       <button class="btn alt" id="pointer-mode">no camera? play with mouse/touch</button>
     </div>
-    <div id="boot-status">on-device hand tracking · LiteRT.js · video uploads ONLY if you post your run</div>
+    <div id="boot-status">on-device hand tracking · video uploads ONLY if you post your run</div>
 
-    <div class="privacy">POWERED BY <b>LiteRT.js</b> (WebGPU) + 21-POINT HAND TRACKING · GAME AI RUNS 100% IN YOUR BROWSER</div>
+    <div class="privacy">POWERED BY <a href="https://developers.googleblog.com/litertjs-googles-high-performance-web-ai-inference/" target="_blank" rel="noopener"><b>LiteRT.js</b></a> (WebGPU) + 21-POINT HAND TRACKING · GAME AI RUNS 100% IN YOUR BROWSER</div>
 
     <div class="wall" id="wall">
       <div class="wall-head">🏆 THE WALL — <b>real players, real webcam clips.</b> post your run and you're here too.</div>
@@ -299,6 +347,7 @@
     <div class="credit">
       made by <a href="https://dorkalev.com" target="_blank" rel="noopener">Dor Kalev</a>
       · <a href="https://github.com/dorkalev/airslice" target="_blank" rel="noopener">source on GitHub</a>
+      <br>hand tracking by <a href="https://developers.googleblog.com/litertjs-googles-high-performance-web-ai-inference/" target="_blank" rel="noopener">LiteRT.js</a>, from Google
     </div>
   </div>
 </div>
@@ -307,11 +356,10 @@
 <div class="overlay gone" id="confirm">
   <div class="confirm-card">
     <div class="overlabel" style="color:#ffe32e;text-shadow:2px 2px 0 #8a6b0e">END THIS RUN?</div>
-    <p class="sub" style="margin:14px auto 20px">“end &amp; post” publishes your clip — camera footage included —
-      with your score on the public wall. “just end” keeps it on this device.</p>
+    <p class="sub" style="margin:14px auto 20px">You'll see your clip next — name it and post it to the public wall if you like.
+      Nothing is published until you tap POST.</p>
     <div class="btnrow">
-      <button class="btn small" id="c-endpost">END &amp; POST 📼</button>
-      <button class="btn alt" id="c-end">just end</button>
+      <button class="btn small" id="c-endpost">END RUN ▸</button>
       <button class="btn pink small" id="c-cancel">KEEP PLAYING</button>
     </div>
     <div class="hint-line">esc to keep playing</div>
@@ -326,17 +374,20 @@
     <div class="beststrip" id="over-best">best: 0</div>
     <div class="replaybox" id="replaybox" style="display:none">
       <video id="replay" playsinline loop muted autoplay></video>
-      <div class="btnrow" style="margin-top:10px">
-        <input id="name-input" maxlength="12" autocomplete="off" spellcheck="false" placeholder="your name (optional)">
-        <button class="btn pink small" id="upload"><span class="lbl">POST TO THE WALL 📼</span> <span class="dwell"></span></button>
-        <a class="btn alt" id="dl" download="airslice-run.webm">save clip</a>
-        <button class="btn alt" id="seewall">the wall 🏆</button>
+      <div class="postbox">
+        <div class="name-arcade" id="name-arcade">
+          <div class="name-cells" id="name-cells" aria-hidden="true"></div>
+          <input id="name-input" maxlength="10" autocomplete="off" autocapitalize="characters"
+                 autocorrect="off" spellcheck="false" inputmode="text" aria-label="your name (optional)">
+        </div>
+        <div class="name-cap"><b>▲</b> enter your name <span style="opacity:.6">(optional)</span></div>
+        <button class="btn pink postbtn" id="upload"><span class="lbl">POST TO THE WALL ▸</span> <span class="dwell"></span></button>
+        <button class="skiplink" id="skip">skip — don't post</button>
+        <div class="consent">Posting publishes this clip — your camera footage included — on the public wall. You can remove it any time (from this browser). <span id="up-status"></span> <a href="#" id="unpost" style="display:none;color:var(--hot)">🗑 remove it</a></div>
       </div>
-      <div class="consent">POSTING PUBLISHES THIS CLIP — YOUR CAMERA FOOTAGE INCLUDED — ON THE PUBLIC WALL &amp; LEADERBOARD. YOU CAN REMOVE IT ANY TIME (FROM THIS BROWSER). <span id="up-status"></span> <a href="#" id="unpost" style="display:none;color:var(--hot)">🗑 remove it</a></div>
     </div>
     <div class="btnrow">
       <button class="btn" id="again"><span class="lbl">AGAIN!</span> <span class="dwell"></span></button>
-      <button class="btn pink" id="brag"><span class="lbl">SHARE 📤</span> <span class="dwell"></span></button>
     </div>
     <div class="hint-line" id="dwell-hint">✋ point at a button and hold your finger on it to press</div>
   </div>
@@ -377,6 +428,8 @@ const GAME_SECONDS = Math.max(5, Math.min(180, +QP.get('t') || 60));
 const USE_EMULATOR = QP.has('emu');
 
 const $ = id => document.getElementById(id);
+// analytics: thin, always-safe wrapper around gtag (no-op if GA is blocked)
+const track = (name, params) => { try { window.gtag && window.gtag('event', name, params || {}); } catch {} };
 const canvas = $('game');
 const ctx = canvas.getContext('2d');
 const cam = $('cam');
@@ -544,7 +597,31 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden && AC && AC.state !== 'running') AC.resume().catch(() => {});
 });
 
-try { $('name-input').value = localStorage.getItem('airslice-name') || ''; } catch {}
+// ---- retro arcade name entry: hidden input drives a row of glowing cells ----
+const NAME_MAX = 10;
+const nameInput = $('name-input'), nameCells = $('name-cells');
+try { nameInput.value = (localStorage.getItem('airslice-name') || '').replace(/[^a-z0-9]/gi, '').slice(0, NAME_MAX); } catch {}
+function renderNameCells() {
+  const v = nameInput.value || '';
+  const focused = document.activeElement === nameInput;
+  const caretAt = v.length < NAME_MAX ? v.length : -1;   // caret sits on the next empty cell
+  let html = '';
+  for (let i = 0; i < NAME_MAX; i++) {
+    const ch = v[i] ? v[i].toUpperCase() : '';
+    const isCaret = focused && i === caretAt;
+    html += `<div class="cell${ch ? ' filled' : ''}${isCaret ? ' active' : ''}">${ch || (isCaret ? '<span class="caret"></span>' : '')}</div>`;
+  }
+  nameCells.innerHTML = html;
+}
+nameInput.addEventListener('input', () => {
+  const clean = nameInput.value.replace(/[^a-z0-9]/gi, '').slice(0, NAME_MAX);
+  if (clean !== nameInput.value) nameInput.value = clean;
+  renderNameCells();
+});
+nameInput.addEventListener('focus', renderNameCells);
+nameInput.addEventListener('blur', renderNameCells);
+$('name-arcade').addEventListener('pointerdown', (e) => { e.preventDefault(); nameInput.focus(); });
+renderNameCells();
 
 // first-visit notice: one click → dismissed forever, land on the home screen
 if (!localStorage.getItem('airslice-ok')) $('legal').style.display = '';
@@ -790,11 +867,16 @@ function startRecording() {
       const replay = $('replay');
       if (replay.src) URL.revokeObjectURL(replay.src);
       replay.src = url;
-      $('dl').href = url;
-      $('dl').download = `airslice-${finalStats.score}pts.${ext}`;
       $('up-status').textContent = `clip ready · ${(blob.size / 1048576).toFixed(1)} MB`;
       $('replaybox').style.display = '';
-      if (autoPostAfterEnd) { autoPostAfterEnd = false; uploadRun(); }
+      if (wantsToPost) {
+        // "end & post" does NOT publish yet — we reveal the clip and focus the
+        // name field so the player can name their run first, then post it with
+        // an explicit tap. (Nothing leaves the device until they press POST.)
+        wantsToPost = false;
+        const ni = $('name-input');
+        requestAnimationFrame(() => { ni.scrollIntoView({ block: 'center', behavior: 'smooth' }); try { ni.focus({ preventScroll: true }); } catch {} });
+      }
     };
     rec.start(1000);
   } catch (e) { console.error('recording unavailable', e); recorder = null; recCtx = null; }
@@ -806,8 +888,10 @@ function stopRecording() {
 async function uploadRun() {
   if (!recordedBlob || uploading || uploaded) return;
   uploading = true;
-  // snapshot everything this upload depends on, up front
+  // snapshot everything this upload depends on, up front — otherwise starting a
+  // new game mid-upload could graft the NEW run's poster/preview onto this one
   const blob = recordedBlob, ext = recordedExt, fs = finalStats;
+  const posterBlob = finalPosterBlob, preview = previewPromise;
   const btn = $('upload'), status = $('up-status');
   btn.disabled = true;
   status.textContent = 'connecting…';
@@ -842,6 +926,7 @@ async function uploadRun() {
         uploaded = true;
         uploadedPath = name;
         rememberMine(name);
+        track('run_posted', { score: fs.score, sliced: fs.sliced, named: !!($('name-input').value || '').trim() });
         btn.querySelector('.lbl').textContent = 'POSTED! 🎉';
         status.textContent = "YOU'RE ON THE WALL 🏆 ";
         $('unpost').style.display = '';
@@ -850,8 +935,8 @@ async function uploadRun() {
         // then jump to the wall and pop the modal showing the run just posted
         const leaf = name.slice(5);
         Promise.allSettled([
-          uploadPoster(leaf, finalPosterBlob),
-          (previewPromise || Promise.resolve(null)).then(b => uploadPreview(leaf, b)),
+          uploadPoster(leaf, posterBlob),
+          (preview || Promise.resolve(null)).then(b => uploadPreview(leaf, b)),
         ]).finally(() => {
           refreshWall();
           showWall();
@@ -892,7 +977,7 @@ $('unpost').onclick = async (e) => {
     link.style.display = 'none';
     const btn = $('upload');
     btn.disabled = false;
-    btn.querySelector('.lbl').textContent = 'POST TO THE WALL 📼';
+    btn.querySelector('.lbl').textContent = 'POST TO THE WALL ▸';
     status.textContent = 'removed from the wall ✔';
   } catch (err) {
     console.error(err);
@@ -902,6 +987,7 @@ $('unpost').onclick = async (e) => {
 };
 
 function startGame() {
+  track('game_start', { mode: pointerMode ? 'pointer' : 'camera' });
   fruits = []; chunks = []; drops = []; popups = []; trail = [];
   score = 0; slicedTotal = 0; bestCombo = 0;
   previewFrames = []; lastPreviewSample = 0; previewPromise = null; finalPosterBlob = null;
@@ -912,11 +998,11 @@ function startGame() {
   // don't clobber an upload that was consented for the previous run and is
   // still finishing in the background
   recordedBlob = null; uploadedPath = null;
-  if (!autoPostAfterEnd && !uploading) uploaded = false;
+  if (!uploading) uploaded = false;
   closeConfirm();
   const upBtn = $('upload');
   upBtn.disabled = false;
-  upBtn.querySelector('.lbl').textContent = 'POST TO THE WALL 📼';
+  upBtn.querySelector('.lbl').textContent = 'POST TO THE WALL ▸';
   $('up-status').textContent = '';
   $('unpost').style.display = 'none';
   $('replaybox').style.display = 'none';
@@ -953,26 +1039,13 @@ function endGame() {
   $('over').classList.remove('gone');
 }
 
-async function shareBrag() {
-  // one-tap share: the posted clip if there is one, else the game + your score
-  if (uploadedPath) { shareRun(uploadedPath, finalStats.score, null); return; }
-  const url = location.origin + location.pathname;
-  const text = `I sliced ${slicedTotal} fruits (${score} pts) with my bare hands in AIRSLICE 🖐🍉 — beat me:`;
-  try {
-    if (navigator.share) { await navigator.share({ title: 'AIRSLICE', text, url }); return; }
-  } catch { return; }
-  try { await navigator.clipboard.writeText(url); addPopup(W / 2, H / 2, 'LINK COPIED 📋', '#b6ff2e', 50); } catch {}
-  window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(url), '_blank', 'noopener');
-}
 $('again').onclick = () => { blip(660); startGame(); };
-$('brag').onclick = shareBrag;
 
 // =====================================================================
 // End-run confirmation (keyboard + leaderboard icon)
 // =====================================================================
 let confirmOpen = false;
-let autoPostAfterEnd = false;
-let goWallAfterPost = false;
+let wantsToPost = false;      // "end & post" chosen → focus the name field once the clip is ready
 let confirmGoWall = false;
 
 // Bring the player to the home screen's leaderboard (single-page — no nav).
@@ -994,36 +1067,66 @@ function closeConfirm() {
   confirmOpen = false;
   $('confirm').classList.add('gone');
 }
-function endRun(post) {
+function endRun() {
   const goWall = confirmGoWall;
   closeConfirm();
-  if (post) {
-    if (recorder && recorder.state !== 'inactive') {
-      autoPostAfterEnd = true;          // upload fires once the clip is ready
-      goWallAfterPost = goWall;
-    } else if (goWall) {
-      endGame(); showWall(); return;    // nothing recorded — just show the wall
-    }
+  if (recorder && recorder.state !== 'inactive') {
+    wantsToPost = true;                 // reveal + focus the name field once the clip is ready
     endGame();
   } else {
     endGame();
-    if (goWall) showWall();
+    if (goWall) showWall();             // nothing recorded → just show the wall
   }
 }
-$('c-endpost').onclick = () => endRun(true);
-$('c-end').onclick = () => endRun(false);
+$('c-endpost').onclick = endRun;
 $('c-cancel').onclick = () => { blip(880); closeConfirm(); };
-$('seewall').onclick = showWall;
+// skip posting: quietly dismiss the clip/post form, leaving the score + AGAIN
+$('skip').onclick = () => { blip(440); $('replaybox').style.display = 'none'; track('post_skipped'); };
 
+// Enter is the "approve / next" key on every screen (and Escape backs out).
+// Routed to whichever overlay is on top so it always does the obvious thing.
+// visible = not display:none (legal uses that) AND not faded out via .gone
+// (overlays hide with `.gone { opacity:0; pointer-events:none }`, not display)
+const isShown = el => el && getComputedStyle(el).display !== 'none' && !el.classList.contains('gone');
 addEventListener('keydown', e => {
   if (e.repeat) return;
-  if (confirmOpen) {
-    if (e.key === 'Escape') { e.preventDefault(); closeConfirm(); }
+  const enter = e.key === 'Enter', esc = e.key === 'Escape', space = e.key === ' ';
+
+  // 1) first-visit legal gate → Enter/Space accepts and starts
+  if (isShown($('legal'))) {
+    if (enter || space) { e.preventDefault(); $('legal-ok').click(); }
     return;
   }
-  if (state === S.PLAY && (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape')) {
+  // 2) end-run confirmation → Enter ends the run, Escape keeps playing
+  if (confirmOpen) {
+    if (enter) { e.preventDefault(); $('c-endpost').click(); }
+    else if (esc) { e.preventDefault(); closeConfirm(); }
+    return;
+  }
+  // 3) clip permalink modal → Enter plays, Escape closes
+  if (isShown($('clipview'))) {
+    if (enter) { e.preventDefault(); $('clip-play').click(); }
+    else if (esc) { e.preventDefault(); closeClip(); }
+    return;
+  }
+  // 4) game over → Enter posts to the wall (or plays again once posting is done/skipped)
+  if (state === S.OVER && isShown($('over'))) {
+    if (enter) {
+      e.preventDefault();
+      if (isShown($('replaybox')) && !uploaded && !uploading) $('upload').click();
+      else $('again').click();
+    }
+    return;
+  }
+  // 5) during play → Space/Enter/Escape open the end-run confirmation
+  if (state === S.PLAY && (space || enter || esc)) {
     e.preventDefault();
     openConfirm(false);
+    return;
+  }
+  // 6) home screen → Enter grabs the blade (starts the camera flow)
+  if (state === S.BOOT && isShown($('boot'))) {
+    if (enter) { e.preventDefault(); $('engage').click(); }
   }
 });
 
@@ -1038,7 +1141,7 @@ function updateDwell(now) {
   if (state !== S.OVER || pointerMode || !fingertip) { resetDwell(); return; }
   const px = fingertip.x / devicePixelRatio, py = fingertip.y / devicePixelRatio;
   let hit = null;
-  for (const b of [$('again'), $('brag'), $('upload')]) {
+  for (const b of [$('again'), $('upload')]) {
     if (b.disabled || !b.offsetParent) continue;
     const r = b.getBoundingClientRect();
     if (px >= r.left && px <= r.right && py >= r.top && py <= r.bottom) { hit = b; break; }
@@ -1427,22 +1530,29 @@ async function shareRun(path, score, btn) {
   const text = `${score} pts on AIRSLICE 🍉 — slice fruit with your bare hands!`;
   try {
     if (navigator.share) { await navigator.share({ title: 'AIRSLICE', text, url }); return; }
-  } catch { return; /* user dismissed the native sheet */ }
+  } catch (e) { if (e && e.name === 'AbortError') return; /* dismissed → stop; any other error falls through to the copy/Twitter fallback */ }
   // desktop fallback: copy the link + open an X/Twitter intent in a new tab
   try { await navigator.clipboard.writeText(url); flashBtn(btn, 'link copied'); } catch {}
   window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(url), '_blank', 'noopener');
 }
 
 // ---- permalink viewer: open a single clip (from ?clip=, a card, or after posting) ----
+// The modal is a real history entry: opening pushes ?clip=<path> so the URL
+// reflects what's on screen and the browser Back button closes the modal.
 let currentClipPath = null, currentClipScore = 0;
-async function openClip(path) {
+const clipQS = (path) => location.pathname + '?clip=' + encodeURIComponent(path) + (USE_EMULATOR ? '&emu=1' : '');
+const baseQS = () => location.pathname + (USE_EMULATOR ? '?emu=1' : '');
+
+async function openClip(path, push = true) {
   currentClipPath = path;
+  if (push) { try { history.pushState({ clip: path }, '', clipQS(path)); } catch {} }
   $('clipview').classList.remove('gone');
   const leaf = path.split('/').pop();
   const p = parseRunName(leaf);
   currentClipScore = p ? p.score : 0;
   $('clip-score').textContent = p ? `${p.score} pts` : 'AIRSLICE clip';
   $('clip-stats').textContent = p ? `${p.player ? '@' + p.player + ' · ' : ''}${p.sliced} sliced · combo x${p.combo}` : '';
+  track('clip_view', { clip: leaf, score: p ? p.score : 0 });
   try {
     const { st, storage } = await getFirebase(USE_EMULATOR);
     const url = await st.getDownloadURL(st.ref(storage, path));
@@ -1453,12 +1563,24 @@ async function openClip(path) {
     $('clip-stats').textContent = 'it may have been removed.';
   }
 }
-function closeClip() {
+// hide the modal UI only (no history side effects) — used by popstate + closeClip
+function closeClipUI() {
   $('clipview').classList.add('gone');
   const v = $('clip-video'); v.pause(); v.removeAttribute('src'); v.load();
-  history.replaceState(null, '', location.pathname + (USE_EMULATOR ? '?emu=1' : ''));
   currentClipPath = null;
 }
+function closeClip() {
+  // if we pushed a clip entry, go Back so the URL/history stay consistent;
+  // the popstate handler then tears down the UI. Otherwise just hide + clean URL.
+  if (history.state && history.state.clip) { history.back(); return; }
+  closeClipUI();
+  try { history.replaceState(null, '', baseQS()); } catch {}
+}
+addEventListener('popstate', (e) => {
+  const clip = e.state && e.state.clip;
+  if (clip) openClip(clip, false);                                  // Back/Forward landed on a clip
+  else if (!$('clipview').classList.contains('gone')) closeClipUI(); // navigated away → close modal
+});
 $('clip-close').onclick = closeClip;                              // ✕
 $('clip-back').onclick = () => { closeClip(); showWall(); };       // ◂ back to the wall
 $('clip-copy').onclick = () => { if (currentClipPath) copyPermalink(currentClipPath, $('clip-copy')); };
@@ -1476,7 +1598,15 @@ $('clip-play').onclick = () => {   // PLAY = start a run now (this click is the 
     const b = $('boot'); b.classList.remove('gone'); b.scrollTo({ top: 0, behavior: 'smooth' });
   }
 };
-if (QP.get('clip')) openClip(QP.get('clip'));
+// only open ?clip= when it's a well-formed ranked run path (don't let a crafted
+// param point the player's <video> at an arbitrary readable object)
+const clipParam = QP.get('clip');
+if (clipParam && /^runs\/\d{7}_\d{13}_\d+f_x\d+(?:_n[a-z0-9]{1,12})?\.(?:webm|mp4)$/.test(clipParam)) {
+  // arrived directly on a clip link: seed a wall entry behind it so Back closes
+  // the modal (lands on the wall) instead of leaving the site.
+  try { history.replaceState(null, '', baseQS()); history.pushState({ clip: clipParam }, '', clipQS(clipParam)); } catch {}
+  openClip(clipParam, false);
+}
 
 async function loadMoreWall() {
   if (wallLoading || wallDone) return;
