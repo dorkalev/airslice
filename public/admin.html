@@ -77,7 +77,7 @@
 </div>
 
 <script type="module">
-import { getFirebase, listPage, getUrl, deleteRun, archiveRun, deletePoster, deletePreview } from './leaderboard.js';
+import { getFirebase, listPage, getUrl, getPosterUrl, getPreviewUrl, deleteRun, archiveRun, deletePoster, deletePreview } from './leaderboard.js';
 import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
@@ -133,16 +133,23 @@ function makeCard(r, rank) {
   el.innerHTML = `
     <span class="rankn">#${rank}</span>
     <div class="vidwrap"><div class="poster">🍉</div>
-      <video preload="none" playsinline loop muted controls></video></div>
+      <video class="preview" autoplay loop muted playsinline></video></div>
     <div class="meta"><span class="pts">${r.score}<small> pts</small></span>
       <span class="stats">${r.sliced} sliced · x${r.combo}<br>${date}</span></div>
     <div class="modrow"><button class="mod archive">📥 archive</button><button class="mod kill">🗑 delete</button></div>`;
   const wrap = el.querySelector('.vidwrap');
-  const vid = el.querySelector('video');
-  let urlP = null;
-  const ensure = () => (urlP ||= getUrl(r.item).then(u => { vid.src = u; return u; }).catch(() => { urlP = null; }));
-  wrap.addEventListener('mouseenter', async () => { await ensure(); try { await vid.play(); wrap.classList.add('playing'); } catch {} });
-  wrap.addEventListener('mouseleave', () => vid.pause());
+  const pv = el.querySelector('video.preview');
+  // same animated preview as the wall (poster = instant static frame)
+  getPosterUrl(r.name).then(u => { if (u) pv.poster = u; });
+  getPreviewUrl(r.name).then(u => {
+    if (!u) return;
+    pv.src = u;
+    pv.addEventListener('loadeddata', () => wrap.classList.add('playing'), { once: true });
+    pv.play().catch(() => {});
+  });
+  // click the thumbnail → open the full clip in a new tab for close inspection
+  wrap.style.cursor = 'zoom-in';
+  wrap.addEventListener('click', async () => { const u = await getUrl(r.item).catch(() => null); if (u) window.open(u, '_blank', 'noopener'); });
   const wire = (btn, label, run) => {
     let armed = 0;
     btn.onclick = async () => {
