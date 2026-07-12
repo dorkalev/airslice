@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <script>
 // Optional canonical-domain guard: set CANON to your domain to funnel every
-// other host to it (keeping the full route). Blank = disabled. Add hosts that
-// should NOT redirect (project hosting, staging) to ALLOW.
+// other host to it (keeping the full route). Blank = disabled.
 (function () {
   var CANON = ''; // set to your own domain to enforce a canonical host
   var ALLOW = [CANON, 'localhost', '127.0.0.1'];
@@ -165,6 +164,7 @@
   .pts small { font-size: 13px; color: #9aa; text-shadow: none; }
   .stats { margin-left: auto; text-align: right; font-size: 9px; color: #778; line-height: 1.6; }
   .crown { position: absolute; top: 8px; left: 10px; font-size: 24px; filter: drop-shadow(0 2px 6px #000); z-index: 2; }
+  .run.pointer { cursor: pointer; }
   .vidwrap { position: relative; }
   .vidwrap video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: #000; }
   .vidwrap .poster {
@@ -172,18 +172,13 @@
     background: linear-gradient(135deg, #16162a, #0c0c16); color: #4a5568; font-size: 26px;
     pointer-events: none; transition: opacity .2s;
   }
-  .vidwrap .poster-img {
-    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
-    opacity: 0; transition: opacity .2s; pointer-events: none;
+  .vidwrap.playing .poster { opacity: 0; }
+  .vidwrap::after {
+    content: '⤢'; position: absolute; bottom: 6px; right: 8px;
+    font-size: 12px; color: #fff; background: #000000aa; padding: 1px 6px; border-radius: 6px;
+    pointer-events: none; opacity: 0; transition: opacity .2s;
   }
-  .vidwrap .poster-img.loaded { opacity: 1; }
-  .vidwrap.playing .poster, .vidwrap.playing .poster-img { opacity: 0; }
-  .run:not(.autoplay) .vidwrap::after {
-    content: 'hover ▸'; position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
-    font-size: 9px; color: #9aa; background: #000000aa; padding: 2px 7px; border-radius: 6px;
-    pointer-events: none; transition: opacity .2s;
-  }
-  .run.autoplay .vidwrap::after, .vidwrap.playing::after { opacity: 0; }
+  .run:hover .vidwrap::after { opacity: 1; }
   .wp-live {
     position: absolute; top: 6px; right: 6px; z-index: 2;
     font: 700 8px/1 'Fragment Mono', monospace; letter-spacing: .12em;
@@ -304,7 +299,7 @@
 <script type="module">
 import { loadLiteRt, loadAndCompile, Tensor, isWebGPUSupported }
   from 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.2/+esm';
-import { getFirebase, listPage, getUrl, getPosterUrl, uploadPoster, deletePoster, encodeRunName, rememberMine, forgetMine, isMine, deleteRun, parseRunName } from './leaderboard.js';
+import { getFirebase, listPage, getUrl, getPosterUrl, uploadPoster, deletePoster, getPreviewUrl, uploadPreview, deletePreview, encodeRunName, rememberMine, forgetMine, isMine, deleteRun, parseRunName } from './leaderboard.js';
 
 const MODEL_URL = './hand_landmark_full.tflite';
 const WASM_DIR = 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.2/wasm/';
@@ -538,6 +533,47 @@ let uploading = false, uploaded = false, uploadedPath = null;
 // a stale/reset score if the loop or a new game moves on before it fires
 let finalStats = { score: 0, sliced: 0, combo: 1 };
 let finalPosterBlob = null;
+// frames sampled across the run → re-encoded into a tiny animated preview loop
+let previewFrames = [], lastPreviewSample = 0, previewPromise = null;
+const PREVIEW_W = 200;
+
+function samplePreviewFrame(now) {
+  if (now - lastPreviewSample < 700) return;   // ~1.4 fps → spread across the run
+  lastPreviewSample = now;
+  const h = Math.round(canvas.height * (PREVIEW_W / canvas.width));
+  const c = document.createElement('canvas'); c.width = PREVIEW_W; c.height = h;
+  c.getContext('2d').drawImage(canvas, 0, 0, PREVIEW_W, h);
+  previewFrames.push(c);
+  if (previewFrames.length > 100) previewFrames.shift();
+}
+
+function pickEven(arr, n) {
+  if (arr.length <= n) return arr.slice();
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(arr[Math.round(i * (arr.length - 1) / (n - 1))]);
+  return out;
+}
+
+// re-encode ~16 sampled frames into a ~2s looping clip (runs in real time, ~2s)
+async function buildPreview() {
+  const frames = pickEven(previewFrames, 16);
+  if (!frames.length || typeof MediaRecorder === 'undefined') return null;
+  try {
+    const c = document.createElement('canvas');
+    c.width = frames[0].width; c.height = frames[0].height;
+    const cx = c.getContext('2d'); cx.drawImage(frames[0], 0, 0);
+    const mime = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']
+      .find(m => MediaRecorder.isTypeSupported(m));
+    const rec = new MediaRecorder(c.captureStream(12), { mimeType: mime, videoBitsPerSecond: 400_000 });
+    const chunks = []; rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    const stopped = new Promise(r => (rec.onstop = r));
+    rec.start();
+    for (const f of frames) { cx.drawImage(f, 0, 0); await new Promise(r => setTimeout(r, 110)); }
+    await new Promise(r => setTimeout(r, 200));
+    rec.stop(); await stopped;
+    return new Blob(chunks, { type: mime });
+  } catch (e) { console.warn('preview build failed', e); return null; }
+}
 
 function startRecording() {
   recordedBlob = null;
@@ -620,8 +656,13 @@ async function uploadRun() {
         status.textContent = "YOU'RE ON THE WALL 🏆 ";
         $('unpost').style.display = '';
         $('unpost').textContent = '🗑 remove it';
-        // upload the tiny thumbnail (best-effort), then refresh so your run shows
-        uploadPoster(name.slice(5), finalPosterBlob).catch(() => {}).finally(() => {
+        // upload the tiny thumbnails (static poster + animated preview), best-effort,
+        // then refresh so your run shows on the wall with its animated thumbnail
+        const leaf = name.slice(5);
+        Promise.allSettled([
+          uploadPoster(leaf, finalPosterBlob),
+          (previewPromise || Promise.resolve(null)).then(b => uploadPreview(leaf, b)),
+        ]).finally(() => {
           refreshWall();
           if (goWallAfterPost) setTimeout(showWall, 500);
         });
@@ -651,7 +692,8 @@ $('unpost').onclick = async (e) => {
     link.textContent = 'removing…';
     const { st, storage } = await getFirebase(USE_EMULATOR);
     await st.deleteObject(st.ref(storage, uploadedPath));
-    deletePoster(uploadedPath.slice(5)).catch(() => {});   // also drop the thumbnail
+    deletePoster(uploadedPath.slice(5)).catch(() => {});    // also drop the thumbnails
+    deletePreview(uploadedPath.slice(5)).catch(() => {});
     forgetMine(uploadedPath);
     uploadedPath = null;
     uploaded = false;
@@ -671,6 +713,7 @@ $('unpost').onclick = async (e) => {
 function startGame() {
   fruits = []; chunks = []; drops = []; popups = []; trail = [];
   score = 0; slicedTotal = 0; bestCombo = 0;
+  previewFrames = []; lastPreviewSample = 0; previewPromise = null; finalPosterBlob = null;
   timeLeft = GAME_SECONDS;
   lastTickSec = null;
   state = S.COUNTDOWN;
@@ -701,7 +744,8 @@ function capturePoster() {
 
 function endGame() {
   if (state === S.OVER) return;
-  capturePoster();                 // capture BEFORE the game-over state changes the canvas
+  capturePoster();                 // instant static thumbnail (before state changes the canvas)
+  previewPromise = buildPreview();  // ~2s: re-encode sampled frames into an animated loop
   state = S.OVER;
   finalStats = { score, sliced: slicedTotal, combo: bestCombo || 1 };
   stopRecording();
@@ -840,6 +884,7 @@ function loop(now) {
   } else if (state === S.PLAY) {
     const paused = confirmOpen || (!pointerMode && !tracking); // dialog or hand lost → freeze
     if (!paused) {
+      samplePreviewFrame(now);       // collect frames for the animated thumbnail
       timeLeft -= dt;
       const sec = Math.ceil(timeLeft);
       if (timeLeft <= 5.2 && sec !== lastTickSec) { lastTickSec = sec; blip(sec <= 1 ? 1760 : 880, .07, .2); }
@@ -1095,43 +1140,29 @@ let wallRank = 0, wallToken = null, wallLoading = false, wallDone = false;
 function wallCard(r) {
   wallRank++;
   const i = wallRank;
-  const auto = i <= AUTOPLAY_TOP;
   const card = document.createElement('div');
-  card.className = 'run' + (i <= 3 ? ` top${i}` : '') + (auto ? ' autoplay' : '');
+  card.className = 'run pointer' + (i <= 3 ? ` top${i}` : '');
   card.innerHTML = `
     ${i === 1 ? '<div class="crown">👑</div>' : ''}
-    <div class="vidwrap"><div class="poster">${auto ? '▶' : '🍉'}</div>
-      <img class="poster-img" alt="">
-      <video preload="none" playsinline loop muted ${auto ? '' : 'controls'}></video></div>
+    <div class="vidwrap"><div class="poster">🍉</div>
+      <video class="preview" autoplay loop muted playsinline></video></div>
     <div class="meta">
       <span class="rank">#${i}</span>
       <span class="pts">${r.score}<small> pts</small></span>
       <span class="stats">${r.sliced} sliced<br>combo x${r.combo}</span>
     </div>`;
   const wrap = card.querySelector('.vidwrap');
-  const vid = card.querySelector('video');
-  const pimg = card.querySelector('.poster-img');
-  // instant thumbnail: show the tiny poster JPEG right away (loads in ~50ms);
-  // the multi-MB video only loads on interaction (or autoplay for the champion)
-  getPosterUrl(r.name).then(u => {
+  const pv = card.querySelector('video.preview');
+  // instant static frame (jpg) as the video's poster, then the tiny animated
+  // preview loop autoplays over it. The FULL clip opens on click.
+  getPosterUrl(r.name).then(u => { if (u) pv.poster = u; });
+  getPreviewUrl(r.name).then(u => {
     if (!u) return;
-    pimg.onload = () => pimg.classList.add('loaded');
-    pimg.src = u;
-    vid.poster = u;
+    pv.src = u;
+    pv.addEventListener('loadeddata', () => wrap.classList.add('playing'), { once: true });
+    pv.play().catch(() => {});
   });
-  let urlP = null;
-  const ensureUrl = () => (urlP ||= getUrl(r.item).then(u => { vid.src = u; return u; }).catch(() => { urlP = null; }));
-  if (auto) {
-    // play only AFTER the src is set (ensureUrl is async) — playing an empty
-    // element is a no-op and leaves the video stuck idle
-    ensureUrl().then(() => vid.play().catch(() => {}));
-    vid.addEventListener('playing', () => wrap.classList.add('playing'), { once: true });
-  } else {
-    const enter = async () => { await ensureUrl(); try { await vid.play(); wrap.classList.add('playing'); } catch {} };
-    wrap.addEventListener('mouseenter', enter);
-    wrap.addEventListener('mouseleave', () => vid.pause());
-    wrap.addEventListener('click', () => { if (vid.paused) enter(); });
-  }
+  card.addEventListener('click', () => openClip(r.path));
   if (isMine(r.path)) {
     const rm = document.createElement('button');
     rm.className = 'rm';

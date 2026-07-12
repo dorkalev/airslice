@@ -77,7 +77,7 @@
 </div>
 
 <script type="module">
-import { getFirebase, listPage, getUrl, deleteRun, archiveRun, deletePoster } from './leaderboard.js';
+import { getFirebase, listPage, getUrl, deleteRun, archiveRun, deletePoster, deletePreview } from './leaderboard.js';
 import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
@@ -151,9 +151,9 @@ function makeCard(r, rank) {
       catch (e) { btn.disabled = false; btn.textContent = 'failed: ' + (e.code || e.message); }
     };
   };
-  const dropPoster = () => deletePoster(r.name).catch(() => {});
-  wire(el.querySelector('.archive'), '📥 archive', () => archiveRun(r.item).then(dropPoster));
-  wire(el.querySelector('.kill'), '🗑 delete', () => deleteRun(r.item).then(dropPoster));
+  const dropThumbs = () => Promise.allSettled([deletePoster(r.name), deletePreview(r.name)]);
+  wire(el.querySelector('.archive'), '📥 archive', () => archiveRun(r.item).then(dropThumbs));
+  wire(el.querySelector('.kill'), '🗑 delete', () => deleteRun(r.item).then(dropThumbs));
   return el;
 }
 

@@ -116,6 +116,28 @@ export async function deletePoster(runName) {
   try { await st.deleteObject(st.ref(storage, posterPathFor(runName))); } catch {}
 }
 
+// Tiny animated preview (previews/<runName>) — a ~2s looping montage of the run,
+// autoplayed on each card so the wall feels alive without loading full clips.
+const previewPathFor = (runName) => 'previews/' + runName;
+export async function getPreviewUrl(runName) {
+  const { st, storage } = await getFirebase();
+  try { return await st.getDownloadURL(st.ref(storage, previewPathFor(runName))); }
+  catch { return null; }
+}
+export async function uploadPreview(runName, blob) {
+  const { st, storage, uid } = await getFirebase();
+  if (!uid || !blob) return;
+  await st.uploadBytes(st.ref(storage, previewPathFor(runName)), blob, {
+    contentType: blob.type || 'video/webm',
+    cacheControl: 'public, max-age=31536000, immutable',
+    customMetadata: { owner: uid },
+  });
+}
+export async function deletePreview(runName) {
+  const { st, storage } = await getFirebase();
+  try { await st.deleteObject(st.ref(storage, previewPathFor(runName))); } catch {}
+}
+
 export async function deleteRun(item) {
   const { st } = await getFirebase();
   return st.deleteObject(item);
