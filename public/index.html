@@ -179,9 +179,25 @@
     border-radius: 8px; padding: 5px 9px; cursor: pointer;
   }
   .rm:hover { background: #7a0b3d; color: #fff; }
+  .share {
+    position: absolute; bottom: 44px; right: 8px; z-index: 3;
+    font-size: 12px; line-height: 1; background: #000000cc; color: var(--cyan);
+    border: 1px solid #29f4ff55; border-radius: 8px; padding: 5px 8px; cursor: pointer;
+  }
+  .share:hover { background: #0b4a7a; color: #fff; }
   #sentinel { height: 30px; }
   #more { color: #778; font-size: 12px; padding: 16px 0 4px; min-height: 20px; }
   #more.err { color: var(--hot); }
+  .clip-card {
+    background: #12121ef2; border: 1px solid #ffffff1c; border-radius: 20px;
+    padding: 26px 30px; max-width: 560px; width: min(92vw, 560px);
+    box-shadow: 0 24px 80px #000c, 0 0 60px #29f4ff22;
+  }
+  .clip-card video {
+    width: 100%; border-radius: 12px; border: 1px solid #ffffff22;
+    background: #000; margin-top: 6px; max-height: 52vh;
+  }
+  .clip-sub { color: #9aa; font-size: 12px; margin: 6px 0 2px; }
 </style>
 </head>
 <body>
@@ -254,10 +270,24 @@
   </div>
 </div>
 
+<!-- ============ CLIP PERMALINK VIEWER ============ -->
+<div class="overlay gone" id="clipview">
+  <div class="clip-card">
+    <div class="overlabel" id="clip-score">— pts</div>
+    <div class="clip-sub" id="clip-stats"></div>
+    <video id="clip-video" playsinline loop controls autoplay muted></video>
+    <div class="btnrow" style="margin-top:14px">
+      <button class="btn small" id="clip-copy">🔗 COPY LINK</button>
+      <a class="btn pink small" href="./">▶ PLAY AIRSLICE</a>
+    </div>
+    <div class="hint-line"><a id="clip-close" style="cursor:pointer;color:var(--cyan)">← the leaderboard</a></div>
+  </div>
+</div>
+
 <script type="module">
 import { loadLiteRt, loadAndCompile, Tensor, isWebGPUSupported }
   from 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.2/+esm';
-import { getFirebase, listPage, getUrl, encodeRunName, rememberMine, forgetMine, isMine, deleteRun } from './leaderboard.js';
+import { getFirebase, listPage, getUrl, encodeRunName, rememberMine, forgetMine, isMine, deleteRun, parseRunName } from './leaderboard.js';
 
 const MODEL_URL = './hand_landmark_full.tflite';
 const WASM_DIR = 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.2/wasm/';
@@ -1071,8 +1101,64 @@ function wallCard(r) {
     };
     card.appendChild(rm);
   }
+  const share = document.createElement('button');
+  share.className = 'share';
+  share.textContent = '🔗';
+  share.title = 'copy a shareable link to this clip';
+  share.onclick = (e) => { e.stopPropagation(); sharePermalink(r, share); };
+  card.appendChild(share);
   board.appendChild(card);
 }
+
+function clipUrl(path) {
+  return `${location.origin}${location.pathname}?clip=${encodeURIComponent(path)}`;
+}
+async function sharePermalink(r, btn) {
+  const url = clipUrl(r.path);
+  const label = btn.textContent;
+  try {
+    if (navigator.share) await navigator.share({ title: 'AIRSLICE', text: `${r.score} pts on AIRSLICE 🍉`, url });
+    else await navigator.clipboard.writeText(url);
+    btn.textContent = '✓';
+    setTimeout(() => { btn.isConnected && (btn.textContent = label); }, 1500);
+  } catch { /* user dismissed share sheet */ }
+}
+
+// ---- permalink viewer: open a single clip from ?clip=<path> ----
+let currentClipPath = null;
+async function openClip(path) {
+  currentClipPath = path;
+  $('clipview').classList.remove('gone');
+  const leaf = path.split('/').pop();
+  const p = parseRunName(leaf);
+  $('clip-score').textContent = p ? `${p.score} pts` : 'AIRSLICE clip';
+  $('clip-stats').textContent = p ? `${p.sliced} sliced · combo x${p.combo}` : '';
+  try {
+    const { st, storage } = await getFirebase(USE_EMULATOR);
+    const url = await st.getDownloadURL(st.ref(storage, path));
+    const v = $('clip-video');
+    v.src = url; v.play().catch(() => {});
+  } catch (e) {
+    $('clip-score').textContent = 'clip not found';
+    $('clip-stats').textContent = 'it may have been removed.';
+  }
+}
+function closeClip() {
+  $('clipview').classList.add('gone');
+  const v = $('clip-video'); v.pause(); v.removeAttribute('src'); v.load();
+  history.replaceState(null, '', location.pathname + (USE_EMULATOR ? '?emu=1' : ''));
+  currentClipPath = null;
+}
+$('clip-close').onclick = closeClip;
+$('clip-copy').onclick = async () => {
+  if (!currentClipPath) return;
+  try {
+    await navigator.clipboard.writeText(clipUrl(currentClipPath));
+    $('clip-copy').textContent = 'COPIED! ✓';
+    setTimeout(() => { $('clip-copy').textContent = '🔗 COPY LINK'; }, 1500);
+  } catch {}
+};
+if (QP.get('clip')) openClip(QP.get('clip'));
 
 async function loadMoreWall() {
   if (wallLoading || wallDone) return;

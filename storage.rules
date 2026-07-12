@@ -11,6 +11,12 @@ rules_version = '2';
 // GCP budget alert as a backstop.
 service firebase.storage {
   match /b/{bucket}/o {
+    // Site owner — may moderate (delete) any run. Signs in with this Google
+    // account on admin.html.
+    function isAdmin() {
+      return request.auth.token.email == 'YOUR_ADMIN_EMAIL@example.com'
+          && request.auth.token.email_verified == true;
+    }
     match /runs/{file} {
       allow read: if true;
       allow create: if request.auth != null
@@ -18,8 +24,13 @@ service firebase.storage {
                     && request.resource.contentType.matches('video/(webm|mp4)(;.*)?')
                     && request.resource.metadata.owner == request.auth.uid;
       allow delete: if request.auth != null
-                    && resource.metadata.owner == request.auth.uid;
+                    && (resource.metadata.owner == request.auth.uid
+                        || isAdmin());
       allow update: if false;
+    }
+    // Archived (hidden) runs — admin-only. Not listed on the public wall.
+    match /archived/{file} {
+      allow read, write: if isAdmin();
     }
     match /{allPaths=**} {
       allow read, write: if false;

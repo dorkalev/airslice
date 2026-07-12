@@ -1,16 +1,12 @@
-// Shared AIRSLICE leaderboard data layer used by the game (index.html).
-// One place for Firebase config, App Check, run-name encoding, and paginated
-// fetching.
+// Shared AIRSLICE leaderboard data layer used by the game (index.html) and the
+// moderation page (admin.html). One place for Firebase config, App Check,
+// run-name encoding, paginated fetching, and moderation helpers.
 //
 // SCALE: runs are named with an inverted, zero-padded score prefix so that
 // Storage's lexicographic list() returns them already ranked highest-first.
 // That lets the wall paginate (infinite scroll) instead of downloading every
 // file's metadata up front — it never fetches more than one page at a time.
 
-// Fill these in with your own Firebase web app config
-// (Firebase console → Project settings → your web app). These are public
-// client identifiers, not secrets — security comes from storage.rules + App
-// Check, not from hiding them.
 export const FIREBASE_CONFIG = {
   apiKey: 'YOUR_API_KEY',
   authDomain: 'YOUR_PROJECT.firebaseapp.com',
@@ -95,6 +91,20 @@ export async function getUrl(item) {
 export async function deleteRun(item) {
   const { st } = await getFirebase();
   return st.deleteObject(item);
+}
+
+// Admin moderation: move a run out of runs/ into archived/ so it no longer
+// shows on the wall (which only lists runs/), without destroying the file.
+// Requires admin privileges per storage.rules.
+export async function archiveRun(item) {
+  const { st, storage } = await getFirebase();
+  const [url, meta] = await Promise.all([st.getDownloadURL(item), st.getMetadata(item)]);
+  const blob = await (await fetch(url)).blob();
+  await st.uploadBytes(st.ref(storage, 'archived/' + item.name), blob, {
+    contentType: meta.contentType || 'video/webm',
+    customMetadata: meta.customMetadata || {},
+  });
+  await st.deleteObject(item);
 }
 
 // "Is this my run?" tracked locally (owner uid stays in file metadata for the

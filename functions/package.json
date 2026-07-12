@@ -1,0 +1,10 @@
+{
+  "name": "airslice-functions",
+  "description": "AIRSLICE Cloud Functions",
+  "engines": { "node": "20" },
+  "main": "index.js",
+  "private": true,
+  "dependencies": {
+    "firebase-functions": "^5.1.0"
+  }
+}

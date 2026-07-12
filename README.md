@@ -39,16 +39,41 @@ webcam ─▶ ROI crop 224×224 ─▶ LiteRT.js (hand_landmark_full.tflite)
 
 ```
 public/
-  index.html         the game + the leaderboard ("The Wall"), one page
+  index.html         the game + the leaderboard ("The Wall") + clip viewer, one page
+  admin.html         owner-only moderation page (served at /admin)
   leaderboard.js     shared Firebase + run data layer
   hand_landmark_full.tflite   MediaPipe hand model (Apache-2.0)
-firebase.json        hosting + storage rules + emulator config
+functions/
+  index.js           Cloud Function: notify a webhook on each upload
+firebase.json        hosting + storage rules + functions + emulator config
 storage.rules        Storage security rules
 ```
 
 The leaderboard lives on the home screen (below the start buttons) and uses
 paginated infinite scroll — the top 3 runs autoplay, the rest load their video
-on hover. The 🏆 button and the post-game screen scroll you to it.
+on hover. The 🏆 button and the post-game screen scroll you to it. Each card has
+a 🔗 button that copies a permalink (`?clip=<path>`) which opens that clip in a
+focused viewer.
+
+### Moderation — `/admin`
+
+`admin.html` (served at `/admin` via a hosting rewrite) is an owner-only page:
+sign in with Google, and if your email matches the admin email in
+`storage.rules` (`isAdmin()`) you get every run with **Archive** (move it out of
+`runs/` into `archived/` so it leaves the wall but is kept) and **Delete**
+(permanent) buttons. Set your own admin email in `storage.rules` and
+`admin.html`, and enable the Google provider (add your hosting domain to the
+Auth **authorized domains**).
+
+### Upload notifications
+
+`functions/index.js` is a Storage-triggered Cloud Function (needs the Blaze
+plan) that posts to a Slack or Discord webhook whenever a run is uploaded. Set
+your bucket in `functions/index.js`, then:
+```bash
+firebase functions:secrets:set NOTIFY_WEBHOOK_URL   # paste your webhook URL
+firebase deploy --only functions
+```
 
 ## Run it yourself
 
