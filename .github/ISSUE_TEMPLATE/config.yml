@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🍉 Play AIRSLICE
+    url: https://airslice.dorkalev.com
+    about: Try the live game in your browser.
+  - name: 🔒 Report a security issue
+    url: https://github.com/dorkalev/airslice/security/advisories/new
+    about: Please report vulnerabilities privately, not as a public issue.
