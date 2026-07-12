@@ -467,9 +467,19 @@ const music = (() => {
 $('mute').onclick = () => {
   muted = !muted;
   $('mute').textContent = muted ? '🔇' : '🔊';
-  if (muted) music.stop();
-  else if (state === S.PLAY || state === S.COUNTDOWN) music.start();
+  if (muted) music.stop(); else music.start();   // ambient — plays whenever unmuted
 };
+
+// Kick off ambient background music on the FIRST user interaction anywhere on
+// the page (browsers block audio until a gesture). Fires once.
+let musicKicked = false;
+function kickMusic() {
+  if (musicKicked || muted) return;
+  musicKicked = true;
+  audio(); music.start();
+}
+['pointerdown', 'touchstart', 'keydown'].forEach(ev =>
+  addEventListener(ev, kickMusic, { passive: true }));
 
 // =====================================================================
 // Hand tracking (LiteRT.js) — same engine as the AIR·HAND demo
@@ -854,7 +864,6 @@ function endGame() {
   capturePoster();                 // instant static thumbnail (before state changes the canvas)
   previewPromise = buildPreview();  // ~2s: re-encode sampled frames into an animated loop
   state = S.OVER;
-  music.stop();
   finalStats = { score, sliced: slicedTotal, combo: bestCombo || 1 };
   stopRecording();
   boom();
