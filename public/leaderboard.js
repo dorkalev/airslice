@@ -65,9 +65,15 @@ export function getFirebase(useEmulator) {
       st.connectStorageEmulator(storage, '127.0.0.1', 9199);
       au.connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
     }
-    let uid = null;
-    try { uid = (await au.signInAnonymously(auth)).user.uid; } catch (e) { console.warn('anon auth failed', e); }
-    return { st, au, storage, auth, uid };
+    // Reuse a persisted session (e.g. the admin's Google login, or a returning
+    // player's anonymous id) — only sign in anonymously if there's truly none.
+    // Blindly calling signInAnonymously() every load would clobber the admin's
+    // Google session and force re-login on every page.
+    try { await auth.authStateReady(); } catch {}
+    if (!auth.currentUser) {
+      try { await au.signInAnonymously(auth); } catch (e) { console.warn('anon auth failed', e); }
+    }
+    return { st, au, storage, auth, get uid() { return auth.currentUser?.uid ?? null; } };
   })();
   return _fb;
 }
@@ -86,6 +92,28 @@ export async function listPage(useEmulator, { pageToken = null, pageSize = 12 } 
 export async function getUrl(item) {
   const { st } = await getFirebase();
   return st.getDownloadURL(item);
+}
+
+// Tiny JPEG thumbnail per run (posters/<runBase>.jpg), shown instantly on the
+// wall so cards don't wait on a multi-MB video download.
+const posterPathFor = (runName) => 'posters/' + runName.replace(/\.[^.]+$/, '') + '.jpg';
+export async function getPosterUrl(runName) {
+  const { st, storage } = await getFirebase();
+  try { return await st.getDownloadURL(st.ref(storage, posterPathFor(runName))); }
+  catch { return null; }   // older runs have no poster → caller falls back
+}
+export async function uploadPoster(runName, blob) {
+  const { st, storage, uid } = await getFirebase();
+  if (!uid || !blob) return;
+  await st.uploadBytes(st.ref(storage, posterPathFor(runName)), blob, {
+    contentType: 'image/jpeg',
+    cacheControl: 'public, max-age=31536000, immutable',
+    customMetadata: { owner: uid },
+  });
+}
+export async function deletePoster(runName) {
+  const { st, storage } = await getFirebase();
+  try { await st.deleteObject(st.ref(storage, posterPathFor(runName))); } catch {}
 }
 
 export async function deleteRun(item) {

@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <script>
-// Canonical-domain guard: funnel every other host (incl. airslice-5b3e3.web.app)
-// to airslice.dorkalev.com, keeping the full route (path + query + hash).
-// localhost stays allow-listed for dev. CANON = '' disables it (OSS forks).
+// Optional canonical-domain guard: set CANON to your domain to funnel every
+// other host to it (keeping the full route). Blank = disabled. Add hosts that
+// should NOT redirect (project hosting, staging) to ALLOW.
 (function () {
   var CANON = ''; // set to your own domain to enforce a canonical host
   var ALLOW = [CANON, 'localhost', '127.0.0.1'];
@@ -172,7 +172,12 @@
     background: linear-gradient(135deg, #16162a, #0c0c16); color: #4a5568; font-size: 26px;
     pointer-events: none; transition: opacity .2s;
   }
-  .vidwrap.playing .poster { opacity: 0; }
+  .vidwrap .poster-img {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .vidwrap .poster-img.loaded { opacity: 1; }
+  .vidwrap.playing .poster, .vidwrap.playing .poster-img { opacity: 0; }
   .run:not(.autoplay) .vidwrap::after {
     content: 'hover ▸'; position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
     font-size: 9px; color: #9aa; background: #000000aa; padding: 2px 7px; border-radius: 6px;
@@ -299,7 +304,7 @@
 <script type="module">
 import { loadLiteRt, loadAndCompile, Tensor, isWebGPUSupported }
   from 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.2/+esm';
-import { getFirebase, listPage, getUrl, encodeRunName, rememberMine, forgetMine, isMine, deleteRun, parseRunName } from './leaderboard.js';
+import { getFirebase, listPage, getUrl, getPosterUrl, uploadPoster, deletePoster, encodeRunName, rememberMine, forgetMine, isMine, deleteRun, parseRunName } from './leaderboard.js';
 
 const MODEL_URL = './hand_landmark_full.tflite';
 const WASM_DIR = 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.2/wasm/';
@@ -532,6 +537,7 @@ let uploading = false, uploaded = false, uploadedPath = null;
 // stats frozen at the instant the run ends, so an async upload can't pick up
 // a stale/reset score if the loop or a new game moves on before it fires
 let finalStats = { score: 0, sliced: 0, combo: 1 };
+let finalPosterBlob = null;
 
 function startRecording() {
   recordedBlob = null;
@@ -614,8 +620,11 @@ async function uploadRun() {
         status.textContent = "YOU'RE ON THE WALL 🏆 ";
         $('unpost').style.display = '';
         $('unpost').textContent = '🗑 remove it';
-        refreshWall();                                   // your run now shows on the wall
-        if (goWallAfterPost) setTimeout(showWall, 700);
+        // upload the tiny thumbnail (best-effort), then refresh so your run shows
+        uploadPoster(name.slice(5), finalPosterBlob).catch(() => {}).finally(() => {
+          refreshWall();
+          if (goWallAfterPost) setTimeout(showWall, 500);
+        });
       });
   } catch (e) {
     console.error(e);
@@ -642,6 +651,7 @@ $('unpost').onclick = async (e) => {
     link.textContent = 'removing…';
     const { st, storage } = await getFirebase(USE_EMULATOR);
     await st.deleteObject(st.ref(storage, uploadedPath));
+    deletePoster(uploadedPath.slice(5)).catch(() => {});   // also drop the thumbnail
     forgetMine(uploadedPath);
     uploadedPath = null;
     uploaded = false;
@@ -679,8 +689,19 @@ function startGame() {
   $('over').classList.add('gone');
 }
 
+function capturePoster() {
+  // grab the final gameplay frame as a tiny JPEG for instant wall thumbnails
+  try {
+    const w = 400, pc = document.createElement('canvas');
+    pc.width = w; pc.height = Math.round(canvas.height * (w / canvas.width));
+    pc.getContext('2d').drawImage(canvas, 0, 0, pc.width, pc.height);
+    pc.toBlob(b => { finalPosterBlob = b; }, 'image/jpeg', 0.72);
+  } catch { finalPosterBlob = null; }
+}
+
 function endGame() {
   if (state === S.OVER) return;
+  capturePoster();                 // capture BEFORE the game-over state changes the canvas
   state = S.OVER;
   finalStats = { score, sliced: slicedTotal, combo: bestCombo || 1 };
   stopRecording();
@@ -1080,6 +1101,7 @@ function wallCard(r) {
   card.innerHTML = `
     ${i === 1 ? '<div class="crown">👑</div>' : ''}
     <div class="vidwrap"><div class="poster">${auto ? '▶' : '🍉'}</div>
+      <img class="poster-img" alt="">
       <video preload="none" playsinline loop muted ${auto ? '' : 'controls'}></video></div>
     <div class="meta">
       <span class="rank">#${i}</span>
@@ -1088,9 +1110,16 @@ function wallCard(r) {
     </div>`;
   const wrap = card.querySelector('.vidwrap');
   const vid = card.querySelector('video');
+  const pimg = card.querySelector('.poster-img');
+  // instant thumbnail: show the tiny poster JPEG right away (loads in ~50ms);
+  // the multi-MB video only loads on interaction (or autoplay for the champion)
+  getPosterUrl(r.name).then(u => {
+    if (!u) return;
+    pimg.onload = () => pimg.classList.add('loaded');
+    pimg.src = u;
+    vid.poster = u;
+  });
   let urlP = null;
-  // resolve the download URL up front (cheap; sets src with preload=none so NO
-  // video bytes are fetched until play) → hover starts instantly, no round-trip
   const ensureUrl = () => (urlP ||= getUrl(r.item).then(u => { vid.src = u; return u; }).catch(() => { urlP = null; }));
   if (auto) {
     // play only AFTER the src is set (ensureUrl is async) — playing an empty
@@ -1098,7 +1127,6 @@ function wallCard(r) {
     ensureUrl().then(() => vid.play().catch(() => {}));
     vid.addEventListener('playing', () => wrap.classList.add('playing'), { once: true });
   } else {
-    ensureUrl();  // prefetch the URL (preload=none → no bytes) so hover is instant
     const enter = async () => { await ensureUrl(); try { await vid.play(); wrap.classList.add('playing'); } catch {} };
     wrap.addEventListener('mouseenter', enter);
     wrap.addEventListener('mouseleave', () => vid.pause());
