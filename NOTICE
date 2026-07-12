@@ -1,0 +1,31 @@
+AIRSLICE — third-party components
+==================================
+
+This project's own source code (index.html, wall.html, leaderboard.js) is
+licensed under the MIT License (see LICENSE).
+
+It also uses and, where noted, redistributes the following third-party
+components under their respective licenses:
+
+1. LiteRT.js (@litertjs/core)
+   Copyright Google LLC — Apache License 2.0
+   https://github.com/google-ai-edge/LiteRT
+   Loaded at runtime from the jsDelivr CDN; not redistributed in this repo.
+
+2. MediaPipe Hand Landmark model (hand_landmark_full.tflite)
+   Copyright Google LLC — Apache License 2.0
+   https://developers.google.com/mediapipe
+   Redistributed in this repository (public/hand_landmark_full.tflite).
+   A copy of the Apache 2.0 license is available at:
+   https://www.apache.org/licenses/LICENSE-2.0
+
+3. Firebase JavaScript SDK
+   Copyright Google LLC — Apache License 2.0
+   Loaded at runtime from gstatic.com; not redistributed in this repo.
+
+4. Fonts: "Bangers" and "Fragment Mono"
+   Served at runtime from Google Fonts (SIL Open Font License 1.1).
+   Not redistributed in this repo.
+
+Fruit and other in-game graphics are Unicode emoji rendered by the end user's
+operating system font; no emoji artwork is bundled or redistributed.

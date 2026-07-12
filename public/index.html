@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>AIRSLICE — slice fruit with your bare hands</title>
+<meta name="description" content="Slice flying fruit in mid-air with your BARE HANDS. Your webcam tracks your index finger — it becomes the blade. On-device AI hand tracking (LiteRT.js). No mouse, no mercy.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Fragment+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #fff;
+    --hot: #ff2e88;
+    --cyan: #29f4ff;
+    --lime: #b6ff2e;
+    --bg: #0a0a12;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); }
+  body { font-family: 'Fragment Mono', monospace; color: var(--ink); }
+
+  #cam { display: none; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
+
+  .overlay {
+    position: fixed; inset: 0; z-index: 20;
+    display: grid; place-content: safe center; justify-items: center;
+    overflow: auto;
+    background: radial-gradient(ellipse at 50% 40%, #0a0a1288 0%, #0a0a12ee 75%);
+    backdrop-filter: blur(6px);
+    transition: opacity .35s;
+    text-align: center;
+    padding: 20px;
+  }
+  .overlay.gone { opacity: 0; pointer-events: none; }
+
+  .title {
+    font-family: 'Bangers', cursive;
+    font-size: clamp(64px, 12vw, 150px);
+    line-height: .9;
+    letter-spacing: .02em;
+    color: #fff;
+    text-shadow:
+      4px 4px 0 var(--hot),
+      8px 8px 0 #7a0b3d,
+      0 0 60px #ff2e8877;
+    transform: rotate(-3deg);
+  }
+  .title .zap { color: var(--lime); text-shadow: 4px 4px 0 #3d7a0b, 8px 8px 0 #1e4004, 0 0 60px #b6ff2e77; }
+  .tag {
+    font-family: 'Bangers', cursive;
+    font-size: clamp(20px, 3.4vw, 34px);
+    letter-spacing: .06em;
+    color: var(--cyan);
+    text-shadow: 2px 2px 0 #0b4a7a;
+    margin: 10px 0 4px;
+    transform: rotate(-1deg);
+  }
+  .sub { font-size: 12px; color: #9aa; max-width: 520px; margin: 10px auto 26px; line-height: 1.7; }
+  .sub b { color: #fff; font-weight: 400; }
+
+  .btn {
+    font-family: 'Bangers', cursive;
+    font-size: 30px; letter-spacing: .05em;
+    color: #0a0a12; background: var(--lime);
+    border: none; border-radius: 14px;
+    padding: 16px 44px; cursor: pointer;
+    box-shadow: 0 6px 0 #5c8a0e, 0 0 50px #b6ff2e44;
+    transform: rotate(-1deg);
+    transition: transform .1s, box-shadow .1s;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn:hover { transform: rotate(-1deg) scale(1.04); }
+  .btn:active { transform: rotate(-1deg) translateY(4px); box-shadow: 0 2px 0 #5c8a0e; }
+  .btn.alt { background: transparent; color: #9aa; box-shadow: none; font-size: 16px; padding: 12px 20px; text-shadow: none; }
+  .btn.alt:hover { color: #fff; }
+  .btn.pink { background: var(--hot); color: #fff; box-shadow: 0 6px 0 #7a0b3d, 0 0 50px #ff2e8844; }
+  .btn .dwell {
+    position: absolute; inset: 0; background: #ffffff55;
+    transform-origin: left; transform: scaleX(0);
+    pointer-events: none;
+  }
+  .btnrow { display: flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap; }
+
+  .privacy { margin-top: 22px; font-size: 10px; color: #667; letter-spacing: .06em; }
+  .privacy b { color: #9aa; font-weight: 400; }
+
+  #boot-status { margin-top: 14px; font-size: 11px; color: #9aa; min-height: 16px; }
+  #boot-status.err { color: var(--hot); }
+
+  .replaybox { margin: 4px 0 14px; }
+  .replaybox video {
+    width: min(46vw, 360px); max-height: 24vh;
+    border-radius: 12px; border: 2px solid #ffffff22;
+    box-shadow: 0 10px 40px #000a; background: #000;
+  }
+  .btn.small { font-size: 19px; padding: 10px 22px; }
+  .consent {
+    font-size: 9.5px; color: #778; letter-spacing: .08em;
+    margin: 8px auto 0; max-width: 480px; line-height: 1.6;
+  }
+  .consent #up-status { color: var(--lime); font-size: 11px; }
+  .bigscore {
+    font-family: 'Bangers', cursive;
+    font-size: clamp(60px, 11vw, 120px);
+    line-height: 1;
+    color: #fff;
+    text-shadow: 5px 5px 0 var(--cyan), 10px 10px 0 #0b4a7a, 0 0 80px #29f4ff55;
+    transform: rotate(-2deg);
+  }
+  .overlabel { font-family: 'Bangers', cursive; font-size: clamp(26px, 5vw, 44px); color: var(--hot); text-shadow: 2px 2px 0 #7a0b3d; letter-spacing: .08em; }
+  .beststrip { font-size: 13px; color: #9aa; margin: 14px 0 26px; }
+  .beststrip .newbest {
+    display: inline-block; font-family: 'Bangers', cursive; font-size: 22px; color: var(--lime);
+    text-shadow: 2px 2px 0 #3d7a0b; transform: rotate(2deg);
+    animation: pulse .6s infinite alternate;
+  }
+  @keyframes pulse { from { transform: rotate(2deg) scale(1);} to { transform: rotate(2deg) scale(1.12);} }
+
+  #mute, #wallbtn {
+    position: fixed; top: 14px; right: 16px; z-index: 30;
+    background: #00000055; border: 1px solid #ffffff22; border-radius: 10px;
+    color: #fff; font-size: 16px; width: 40px; height: 40px; cursor: pointer;
+    display: grid; place-items: center; text-decoration: none;
+  }
+  #wallbtn { top: 62px; }
+  .confirm-card {
+    background: #12121ef2; border: 1px solid #ffffff1c; border-radius: 20px;
+    padding: 34px 40px; max-width: 560px;
+    box-shadow: 0 24px 80px #000c, 0 0 60px #ffe32e22;
+  }
+  #mute:hover, #wallbtn:hover { background: #000000aa; border-color: #ffffff44; }
+  .hint-line { font-size: 11px; color: #778; margin-top: 18px; }
+
+  /* boot leaderboard preview — makes it obvious clips are captured & public */
+  .wallpreview { margin-top: 22px; }
+  .wp-head { font-size: 11px; color: #9aa; letter-spacing: .04em; margin-bottom: 12px; }
+  .wp-head b { color: var(--cyan); font-weight: 400; }
+  .wp-strip { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .wp-card {
+    position: relative; width: 148px; border-radius: 12px; overflow: hidden;
+    background: #000; border: 1px solid #ffffff1c;
+    box-shadow: 0 8px 26px #0008;
+  }
+  .wp-card video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: #12121e; }
+  .wp-card .wp-badge {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: baseline; gap: 6px; padding: 5px 8px;
+    background: linear-gradient(transparent, #000c 40%);
+    font-family: 'Bangers', cursive; letter-spacing: .04em;
+  }
+  .wp-card .wp-rank { color: #ffd24f; font-size: 15px; }
+  .wp-card.r2 .wp-rank { color: #cfd6e0; } .wp-card.r3 .wp-rank { color: #e09a5a; }
+  .wp-card .wp-pts { color: var(--cyan); font-size: 19px; }
+  .wp-card .wp-pts small { font-size: 10px; color: #9aa; }
+  .wp-live {
+    position: absolute; top: 6px; right: 6px; z-index: 2;
+    font: 700 8px/1 'Fragment Mono', monospace; letter-spacing: .12em;
+    background: #ff2e88; color: #fff; padding: 3px 5px; border-radius: 4px;
+  }
+  .wp-all { display: inline-block; margin-top: 14px; font-size: 12px; color: var(--cyan); }
+</style>
+</head>
+<body>
+
+<video id="cam" playsinline muted></video>
+<canvas id="game"></canvas>
+<button id="mute" title="sound">🔊</button>
+<a id="wallbtn" href="wall.html" title="the wall — leaderboard">🏆</a>
+
+<!-- ============ BOOT ============ -->
+<div class="overlay" id="boot">
+  <div>
+    <div class="title">AIR<span class="zap">SLICE</span></div>
+    <div class="tag">SLICE FLYING FRUIT WITH YOUR BARE HANDS</div>
+    <p class="sub">Your webcam tracks your <b>index finger</b> — it becomes the blade.
+      Slice the flying fruit. Don't touch the 🪨. <b>60 seconds.</b> Combos stack.
+      Miss nothing, brag hard.</p>
+    <div class="btnrow">
+      <button class="btn" id="engage">GIMME THE BLADE ▸</button>
+      <button class="btn alt" id="pointer-mode">no camera? play with mouse/touch</button>
+    </div>
+    <div id="boot-status">on-device hand tracking · LiteRT.js · video uploads ONLY if you post your run</div>
+
+    <div class="wallpreview" id="wallpreview" style="display:none">
+      <div class="wp-head">🏆 ON THE WALL — <b>real players, real webcam clips.</b> post yours and you're here too.</div>
+      <div class="wp-strip" id="wp-strip"></div>
+      <a class="wp-all" href="wall.html">see the full leaderboard →</a>
+    </div>
+
+    <div class="privacy">POWERED BY <b>LiteRT.js</b> (WebGPU) + 21-POINT HAND TRACKING · GAME AI RUNS 100% IN YOUR BROWSER</div>
+  </div>
+</div>
+
+<!-- ============ END-RUN CONFIRMATION ============ -->
+<div class="overlay gone" id="confirm">
+  <div class="confirm-card">
+    <div class="overlabel" style="color:#ffe32e;text-shadow:2px 2px 0 #8a6b0e">END THIS RUN?</div>
+    <p class="sub" style="margin:14px auto 20px">“end &amp; post” publishes your clip — camera footage included —
+      with your score on the public wall. “just end” keeps it on this device.</p>
+    <div class="btnrow">
+      <button class="btn small" id="c-endpost">END &amp; POST 📼</button>
+      <button class="btn alt" id="c-end">just end</button>
+      <button class="btn pink small" id="c-cancel">KEEP PLAYING</button>
+    </div>
+    <div class="hint-line">esc to keep playing</div>
+  </div>
+</div>
+
+<!-- ============ GAME OVER ============ -->
+<div class="overlay gone" id="over">
+  <div>
+    <div class="overlabel" id="over-label">TIME'S UP!</div>
+    <div class="bigscore" id="over-score">0</div>
+    <div class="beststrip" id="over-best">best: 0</div>
+    <div class="replaybox" id="replaybox" style="display:none">
+      <video id="replay" playsinline loop muted autoplay></video>
+      <div class="btnrow" style="margin-top:10px">
+        <button class="btn pink small" id="upload"><span class="lbl">POST TO THE WALL 📼</span> <span class="dwell"></span></button>
+        <a class="btn alt" id="dl" download="airslice-run.webm">save clip</a>
+        <a class="btn alt" href="wall.html">the wall 🏆</a>
+      </div>
+      <div class="consent">POSTING PUBLISHES THIS CLIP — YOUR CAMERA FOOTAGE INCLUDED — ON THE PUBLIC WALL &amp; LEADERBOARD. YOU CAN REMOVE IT ANY TIME (FROM THIS BROWSER). <span id="up-status"></span> <a href="#" id="unpost" style="display:none;color:var(--hot)">🗑 remove it</a></div>
+    </div>
+    <div class="btnrow">
+      <button class="btn" id="again"><span class="lbl">AGAIN!</span> <span class="dwell"></span></button>
+      <button class="btn pink" id="brag"><span class="lbl">COPY BRAG 📋</span> <span class="dwell"></span></button>
+    </div>
+    <div class="hint-line" id="dwell-hint">✋ point at a button and hold your finger on it to press</div>
+  </div>
+</div>
+
+<script type="module">
+import { loadLiteRt, loadAndCompile, Tensor, isWebGPUSupported }
+  from 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.2/+esm';
+import { getFirebase, listPage, getUrl, encodeRunName, rememberMine, forgetMine } from './leaderboard.js';
+
+const MODEL_URL = './hand_landmark_full.tflite';
+const WASM_DIR = 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.2/wasm/';
+const INPUT_SIZE = 224;
+const QP = new URLSearchParams(location.search);
+const GAME_SECONDS = Math.max(5, Math.min(180, +QP.get('t') || 60));
+const USE_EMULATOR = QP.has('emu');
+
+const $ = id => document.getElementById(id);
+const canvas = $('game');
+const ctx = canvas.getContext('2d');
+const cam = $('cam');
+
+let W = 0, H = 0, UNIT = 1; // UNIT scales sizes to screen
+function resize() {
+  W = canvas.width = innerWidth * devicePixelRatio;
+  H = canvas.height = innerHeight * devicePixelRatio;
+  canvas.style.width = innerWidth + 'px';
+  canvas.style.height = innerHeight + 'px';
+  UNIT = Math.min(W, H) / 800;
+}
+resize();
+addEventListener('resize', resize);
+
+// =====================================================================
+// Audio: tiny synth, no assets
+// =====================================================================
+let AC = null, muted = false;
+function audio() {
+  if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+  return AC;
+}
+function swoosh() {
+  if (muted) return;
+  const ac = audio(), t = ac.currentTime;
+  const buf = ac.createBuffer(1, ac.sampleRate * 0.09, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass';
+  bp.frequency.setValueAtTime(600 + Math.random() * 1200, t);
+  const g = ac.createGain(); g.gain.setValueAtTime(0.5, t);
+  g.gain.exponentialRampToValueAtTime(0.01, t + 0.09);
+  src.connect(bp).connect(g).connect(ac.destination); src.start();
+}
+function boom() {
+  if (muted) return;
+  const ac = audio(), t = ac.currentTime;
+  const o = ac.createOscillator(); o.type = 'sine';
+  o.frequency.setValueAtTime(160, t);
+  o.frequency.exponentialRampToValueAtTime(30, t + 0.4);
+  const g = ac.createGain(); g.gain.setValueAtTime(0.7, t);
+  g.gain.exponentialRampToValueAtTime(0.01, t + 0.45);
+  o.connect(g).connect(ac.destination); o.start(); o.stop(t + 0.5);
+}
+function blip(freq = 880, dur = 0.08, vol = 0.25) {
+  if (muted) return;
+  const ac = audio(), t = ac.currentTime;
+  const o = ac.createOscillator(); o.type = 'square';
+  o.frequency.setValueAtTime(freq, t);
+  const g = ac.createGain(); g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.01, t + dur);
+  o.connect(g).connect(ac.destination); o.start(); o.stop(t + dur + 0.02);
+}
+$('mute').onclick = () => { muted = !muted; $('mute').textContent = muted ? '🔇' : '🔊'; };
+
+// =====================================================================
+// Hand tracking (LiteRT.js) — same engine as the AIR·HAND demo
+// =====================================================================
+let model = null, tracking = false, pointerMode = false;
+let fingertip = null;        // {x, y} in SCREEN px (mirrored), null when no hand
+let handSeen = false;
+
+const scratch = document.createElement('canvas');
+scratch.width = scratch.height = INPUT_SIZE;
+const sctx = scratch.getContext('2d', { willReadFrequently: true });
+const roi = { cx: 0, cy: 0, size: 0 };
+function resetRoi() {
+  roi.cx = cam.videoWidth / 2; roi.cy = cam.videoHeight / 2;
+  roi.size = Math.min(cam.videoWidth, cam.videoHeight) * 0.95;
+}
+function clampRoi() {
+  const vw = cam.videoWidth, vh = cam.videoHeight;
+  roi.size = Math.min(Math.max(roi.size, 150), Math.min(vw, vh));
+  const h = roi.size / 2;
+  roi.cx = Math.min(Math.max(roi.cx, h), vw - h);
+  roi.cy = Math.min(Math.max(roi.cy, h), vh - h);
+}
+const inputBuf = new Float32Array(INPUT_SIZE * INPUT_SIZE * 3);
+
+// cover-fit mapping video → screen, mirrored
+function videoToScreen(x, y) {
+  const scale = Math.max(W / cam.videoWidth, H / cam.videoHeight);
+  const ox = (W - cam.videoWidth * scale) / 2;
+  const oy = (H - cam.videoHeight * scale) / 2;
+  return [W - (x * scale + ox), y * scale + oy];
+}
+
+let smoothTip = null;
+let lostFrames = 0;
+async function inferLoop() {
+  while (true) {
+    if (document.hidden) { await new Promise(r => setTimeout(r, 200)); continue; }
+    try {
+      const half = roi.size / 2;
+      sctx.drawImage(cam, roi.cx - half, roi.cy - half, roi.size, roi.size, 0, 0, INPUT_SIZE, INPUT_SIZE);
+      const px = sctx.getImageData(0, 0, INPUT_SIZE, INPUT_SIZE).data;
+      for (let i = 0, j = 0; i < px.length; i += 4) {
+        inputBuf[j++] = px[i] / 255; inputBuf[j++] = px[i + 1] / 255; inputBuf[j++] = px[i + 2] / 255;
+      }
+      const input = new Tensor(inputBuf, [1, INPUT_SIZE, INPUT_SIZE, 3]);
+      const out = await model.run(input);
+      input.delete();
+      const raw = await out[0].data(); out[0].delete();
+      const score = (await out[1].data())[0]; out[1].delete();
+      for (let i = 2; i < out.length; i++) out[i].delete();
+
+      if (score > (tracking ? 0.35 : 0.55)) {
+        tracking = true; handSeen = true; lostFrames = 0;
+        const scale = roi.size / INPUT_SIZE;
+        const lm = [];
+        for (let i = 0; i < 21; i++) lm.push([roi.cx - half + raw[i * 3] * scale, roi.cy - half + raw[i * 3 + 1] * scale]);
+        const [sx, sy] = videoToScreen(lm[8][0], lm[8][1]);   // index fingertip
+        smoothTip = smoothTip
+          ? { x: smoothTip.x + (sx - smoothTip.x) * 0.65, y: smoothTip.y + (sy - smoothTip.y) * 0.65 }
+          : { x: sx, y: sy };
+        fingertip = smoothTip;
+        let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+        for (const [x, y] of lm) {
+          minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+          minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+        }
+        roi.cx = (minX + maxX) / 2; roi.cy = (minY + maxY) / 2;
+        roi.size = Math.max(maxX - minX, maxY - minY) * 2.4;
+        clampRoi();
+      } else if (++lostFrames > 4) {
+        tracking = false; fingertip = null; smoothTip = null;
+        resetRoi();
+      }
+    } catch (e) { console.error(e); await new Promise(r => setTimeout(r, 300)); }
+    await new Promise(r => requestAnimationFrame(r));
+  }
+}
+
+// =====================================================================
+// Game state
+// =====================================================================
+const S = { BOOT: 0, COUNTDOWN: 1, PLAY: 2, OVER: 3 };
+let state = S.BOOT;
+let score = 0, best = +(localStorage.getItem('airslice-best') || 0);
+let timeLeft = GAME_SECONDS;
+let countdownEnd = 0;
+let fruits = [], chunks = [], drops = [], popups = [];
+let trail = [];                  // blade points {x,y,t}
+let shake = 0;
+let lastSpawn = 0, spawnEvery = 1000;
+let slicedTotal = 0, bestCombo = 0;
+let lastTickSec = null;
+
+const FRUITS = [
+  ['🍉', '#ff4f6e'], ['🍎', '#ff5349'], ['🍊', '#ffa02e'], ['🍋', '#ffe32e'],
+  ['🥝', '#8ee53f'], ['🍇', '#b16eff'], ['🍓', '#ff4f87'], ['🍍', '#ffd24f'],
+];
+
+function spawnWave(now) {
+  const elapsed = GAME_SECONDS - timeLeft;
+  const n = 1 + Math.floor(Math.random() * Math.min(3, 1 + elapsed / 15));
+  for (let i = 0; i < n; i++) {
+    const rock = Math.random() < 0.13 && elapsed > 5;
+    const [emoji, color] = rock ? ['🪨', '#9aa0ab'] : FRUITS[(Math.random() * FRUITS.length) | 0];
+    const x = W * (0.15 + Math.random() * 0.7);
+    const g = 1.55 * H;                                   // px/s²
+    const peak = H * (0.45 + Math.random() * 0.4);
+    fruits.push({
+      emoji, color, rock,
+      x, y: H + 60 * UNIT,
+      vx: (W / 2 - x) * (0.1 + Math.random() * 0.25) + (Math.random() - 0.5) * 0.1 * W,
+      vy: -Math.sqrt(2 * g * peak),
+      g,
+      r: (36 + Math.random() * 14) * UNIT,
+      rot: Math.random() * 6.3, vr: (Math.random() - 0.5) * 3,
+    });
+  }
+  spawnEvery = Math.max(520, 1050 - elapsed * 8);
+  lastSpawn = now;
+}
+
+function sliceFruit(f, dirX, dirY) {
+  f.sliced = true;
+  const mag = Math.hypot(dirX, dirY) || 1;
+  const nx = dirX / mag, ny = dirY / mag;
+  const ang = Math.atan2(ny, nx);
+  for (const side of [-1, 1]) {
+    chunks.push({
+      emoji: f.emoji, x: f.x, y: f.y, r: f.r,
+      vx: f.vx * 0.3 + -ny * side * 260 * UNIT + nx * 60 * UNIT,
+      vy: f.vy * 0.3 + nx * side * 260 * UNIT + ny * 60 * UNIT - 120 * UNIT,
+      rot: f.rot, vr: side * (2 + Math.random() * 3),
+      clipAng: ang, side, life: 1,
+    });
+  }
+  for (let i = 0; i < 14; i++) {
+    const a = Math.random() * 6.3, sp = (120 + Math.random() * 480) * UNIT;
+    drops.push({ x: f.x, y: f.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 150 * UNIT, r: (2.5 + Math.random() * 5) * UNIT, color: f.color, life: 1 });
+  }
+}
+
+function addPopup(x, y, text, color, size = 40) {
+  popups.push({ x, y, text, color, size: size * UNIT, life: 1 });
+}
+
+function segDist(px, py, qx, qy, cx, cy) {
+  const dx = qx - px, dy = qy - py;
+  const len2 = dx * dx + dy * dy;
+  if (!len2) return Math.hypot(cx - px, cy - py);
+  let t = ((cx - px) * dx + (cy - py) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(cx - (px + t * dx), cy - (py + t * dy));
+}
+
+// ---- run recording (composited canvas = camera + game) ----
+// recorded from a downscaled mirror canvas (max 640px wide) at a modest
+// bitrate so a 60s run stays in the single-digit-MB range
+const REC_MAX_WIDTH = 640;
+const REC_BITRATE = 1_200_000;
+let recorder = null, recordedBlob = null, recordedExt = 'webm';
+let recCanvas = null, recCtx = null;
+let uploading = false, uploaded = false, uploadedPath = null;
+// stats frozen at the instant the run ends, so an async upload can't pick up
+// a stale/reset score if the loop or a new game moves on before it fires
+let finalStats = { score: 0, sliced: 0, combo: 1 };
+
+function startRecording() {
+  recordedBlob = null;
+  try {
+    const scale = Math.min(1, REC_MAX_WIDTH / canvas.width);
+    recCanvas = document.createElement('canvas');
+    recCanvas.width = Math.round(canvas.width * scale);
+    recCanvas.height = Math.round(canvas.height * scale);
+    recCtx = recCanvas.getContext('2d');
+    const stream = recCanvas.captureStream(30);
+    const mime = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']
+      .find(m => MediaRecorder.isTypeSupported(m));
+    // per-recording state, captured in the closure — a later recording can
+    // never overwrite this one's chunks or blob
+    const chunks = [];
+    const ext = (mime || '').includes('mp4') ? 'mp4' : 'webm';
+    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: REC_BITRATE });
+    recorder = rec;
+    rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    rec.onstop = () => {
+      if (recorder === rec) recCtx = null;
+      const blob = new Blob(chunks, { type: rec.mimeType || 'video/webm' });
+      recordedBlob = blob;
+      recordedExt = ext;
+      const url = URL.createObjectURL(blob);
+      const replay = $('replay');
+      if (replay.src) URL.revokeObjectURL(replay.src);
+      replay.src = url;
+      $('dl').href = url;
+      $('dl').download = `airslice-${finalStats.score}pts.${ext}`;
+      $('up-status').textContent = `clip ready · ${(blob.size / 1048576).toFixed(1)} MB`;
+      $('replaybox').style.display = '';
+      if (autoPostAfterEnd) { autoPostAfterEnd = false; uploadRun(); }
+    };
+    rec.start(1000);
+  } catch (e) { console.error('recording unavailable', e); recorder = null; recCtx = null; }
+}
+function stopRecording() {
+  if (recorder && recorder.state !== 'inactive') recorder.stop();
+}
+
+async function uploadRun() {
+  if (!recordedBlob || uploading || uploaded) return;
+  uploading = true;
+  // snapshot everything this upload depends on, up front
+  const blob = recordedBlob, ext = recordedExt, fs = finalStats;
+  const btn = $('upload'), status = $('up-status');
+  btn.disabled = true;
+  status.textContent = 'connecting…';
+  try {
+    const { st, storage, uid } = await getFirebase(USE_EMULATOR);
+    if (!uid) throw new Error('sign-in unavailable');
+    const name = encodeRunName({ score: fs.score, sliced: fs.sliced, combo: fs.combo, ext });
+    const task = st.uploadBytesResumable(st.ref(storage, name), blob, {
+      contentType: blob.type || 'video/webm',
+      customMetadata: {
+        score: String(fs.score),
+        sliced: String(fs.sliced),
+        combo: String(fs.combo),
+        owner: uid,
+      },
+    });
+    task.on('state_changed',
+      s => { status.textContent = `uploading ${Math.round(s.bytesTransferred / s.totalBytes * 100)}%…`; },
+      err => {
+        console.error(err);
+        status.textContent = 'upload failed (' + (err.code || err.message) + ')';
+        uploading = false;
+        btn.disabled = false;
+      },
+      () => {
+        uploading = false;
+        uploaded = true;
+        uploadedPath = name;
+        rememberMine(name);
+        btn.querySelector('.lbl').textContent = 'POSTED! 🎉';
+        status.textContent = "YOU'RE ON THE WALL 🏆 ";
+        $('unpost').style.display = '';
+        $('unpost').textContent = '🗑 remove it';
+        if (goWallAfterPost) setTimeout(() => { location.href = WALL_URL; }, 700);
+      });
+  } catch (e) {
+    console.error(e);
+    status.textContent = 'upload failed';
+    uploading = false;
+    btn.disabled = false;
+  }
+}
+$('upload').onclick = () => { blip(990); uploadRun(); };
+
+// two-click removal of the player's own posted run
+let unpostArmed = 0;
+$('unpost').onclick = async (e) => {
+  e.preventDefault();
+  if (!uploadedPath) return;
+  const link = $('unpost'), status = $('up-status');
+  if (performance.now() - unpostArmed > 3000) {
+    unpostArmed = performance.now();
+    link.textContent = 'SURE? click again 🗑';
+    setTimeout(() => { if (uploadedPath) link.textContent = '🗑 remove it'; }, 3000);
+    return;
+  }
+  try {
+    link.textContent = 'removing…';
+    const { st, storage } = await getFirebase(USE_EMULATOR);
+    await st.deleteObject(st.ref(storage, uploadedPath));
+    forgetMine(uploadedPath);
+    uploadedPath = null;
+    uploaded = false;
+    unpostArmed = 0;
+    link.style.display = 'none';
+    const btn = $('upload');
+    btn.disabled = false;
+    btn.querySelector('.lbl').textContent = 'POST TO THE WALL 📼';
+    status.textContent = 'removed from the wall ✔';
+  } catch (err) {
+    console.error(err);
+    link.textContent = '🗑 remove it';
+    status.textContent = 'removal failed (' + (err.code || err.message) + ')';
+  }
+};
+
+function startGame() {
+  fruits = []; chunks = []; drops = []; popups = []; trail = [];
+  score = 0; slicedTotal = 0; bestCombo = 0;
+  timeLeft = GAME_SECONDS;
+  lastTickSec = null;
+  state = S.COUNTDOWN;
+  countdownEnd = performance.now() + 3000;
+  // don't clobber an upload that was consented for the previous run and is
+  // still finishing in the background
+  recordedBlob = null; uploadedPath = null;
+  if (!autoPostAfterEnd && !uploading) uploaded = false;
+  closeConfirm();
+  const upBtn = $('upload');
+  upBtn.disabled = false;
+  upBtn.querySelector('.lbl').textContent = 'POST TO THE WALL 📼';
+  $('up-status').textContent = '';
+  $('unpost').style.display = 'none';
+  $('replaybox').style.display = 'none';
+  $('over').classList.add('gone');
+}
+
+function endGame() {
+  if (state === S.OVER) return;
+  state = S.OVER;
+  finalStats = { score, sliced: slicedTotal, combo: bestCombo || 1 };
+  stopRecording();
+  boom();
+  const isBest = score > best;
+  if (isBest) { best = score; localStorage.setItem('airslice-best', best); }
+  $('over-label').textContent = score < 50 ? 'OUCH. TIME!' : score < 200 ? "TIME'S UP!" : 'ABSOLUTE LEGEND!';
+  $('over-score').textContent = score;
+  $('over-best').innerHTML = isBest
+    ? '<span class="newbest">★ NEW BEST ★</span>'
+    : `best: ${best} · sliced: ${slicedTotal} · top combo: x${bestCombo || 1}`;
+  $('dwell-hint').style.display = pointerMode ? 'none' : '';
+  $('over').classList.remove('gone');
+}
+
+async function copyBrag() {
+  const txt = `🖐🍉 I sliced ${slicedTotal} fruits (${score} pts) IN MID-AIR with my bare hands in AIRSLICE — webcam slicing game, the AI runs 100% in your browser. Beat me: ${location.origin}${location.pathname}`;
+  try {
+    if (navigator.share) await navigator.share({ text: txt });
+    else { await navigator.clipboard.writeText(txt); addPopup(W / 2, H / 2, 'COPIED! 📋', '#b6ff2e', 54); }
+  } catch {}
+}
+$('again').onclick = () => { blip(660); startGame(); };
+$('brag').onclick = copyBrag;
+
+// =====================================================================
+// End-run confirmation (keyboard + leaderboard icon)
+// =====================================================================
+const WALL_URL = 'wall.html' + (USE_EMULATOR ? '?emu=1' : '');
+$('wallbtn').href = WALL_URL;
+let confirmOpen = false;
+let autoPostAfterEnd = false;
+let goWallAfterPost = false;
+let confirmGoWall = false;
+
+function openConfirm(goWall) {
+  if (state !== S.PLAY || confirmOpen) return;
+  confirmOpen = true;
+  confirmGoWall = goWall;
+  blip(520, .1, .2);
+  $('confirm').classList.remove('gone');
+}
+function closeConfirm() {
+  confirmOpen = false;
+  $('confirm').classList.add('gone');
+}
+function endRun(post) {
+  const goWall = confirmGoWall;
+  closeConfirm();
+  if (post) {
+    if (recorder && recorder.state !== 'inactive') {
+      autoPostAfterEnd = true;          // upload fires once the clip is ready
+      goWallAfterPost = goWall;
+    } else if (goWall) {
+      location.href = WALL_URL;         // nothing recorded — just go
+      return;
+    }
+    endGame();
+  } else {
+    endGame();
+    if (goWall) location.href = WALL_URL;
+  }
+}
+$('c-endpost').onclick = () => endRun(true);
+$('c-end').onclick = () => endRun(false);
+$('c-cancel').onclick = () => { blip(880); closeConfirm(); };
+
+addEventListener('keydown', e => {
+  if (e.repeat) return;
+  if (confirmOpen) {
+    if (e.key === 'Escape') { e.preventDefault(); closeConfirm(); }
+    return;
+  }
+  if (state === S.PLAY && (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape')) {
+    e.preventDefault();
+    openConfirm(false);
+  }
+});
+
+$('wallbtn').addEventListener('click', e => {
+  if (state === S.PLAY) {
+    e.preventDefault();
+    openConfirm(true);
+  }
+});
+
+// dwell-to-press for camera players on the game-over buttons
+const dwell = { btn: null, start: 0 };
+function updateDwell(now) {
+  if (state !== S.OVER || pointerMode || !fingertip) { resetDwell(); return; }
+  const px = fingertip.x / devicePixelRatio, py = fingertip.y / devicePixelRatio;
+  let hit = null;
+  for (const b of [$('again'), $('brag'), $('upload')]) {
+    if (b.disabled || !b.offsetParent) continue;
+    const r = b.getBoundingClientRect();
+    if (px >= r.left && px <= r.right && py >= r.top && py <= r.bottom) { hit = b; break; }
+  }
+  if (hit !== dwell.btn) { resetDwell(); dwell.btn = hit; dwell.start = now; }
+  if (dwell.btn) {
+    const frac = (now - dwell.start) / 900;
+    dwell.btn.querySelector('.dwell').style.transform = `scaleX(${Math.min(1, frac)})`;
+    if (frac >= 1) { const b = dwell.btn; resetDwell(); b.click(); }
+  }
+}
+function resetDwell() {
+  if (dwell.btn) dwell.btn.querySelector('.dwell').style.transform = 'scaleX(0)';
+  dwell.btn = null;
+}
+
+// =====================================================================
+// Main loop
+// =====================================================================
+let prevT = performance.now();
+let prevTip = null;
+
+function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.05, (now - prevT) / 1000);
+  prevT = now;
+
+  // ---- blade input ----
+  const tip = pointerMode ? pointerTip : fingertip;
+  if (tip) {
+    trail.push({ x: tip.x, y: tip.y, t: now });
+  }
+  while (trail.length && now - trail[0].t > 150) trail.shift();
+
+  // ---- state ----
+  if (state === S.COUNTDOWN) {
+    if ((!pointerMode && !tracking && !handSeen)) countdownEnd = now + 3000; // wait for first hand
+    if (now >= countdownEnd) { state = S.PLAY; lastSpawn = now; blip(1320, .15, .3); startRecording(); }
+  } else if (state === S.PLAY) {
+    const paused = confirmOpen || (!pointerMode && !tracking); // dialog or hand lost → freeze
+    if (!paused) {
+      timeLeft -= dt;
+      const sec = Math.ceil(timeLeft);
+      if (timeLeft <= 5.2 && sec !== lastTickSec) { lastTickSec = sec; blip(sec <= 1 ? 1760 : 880, .07, .2); }
+      if (timeLeft <= 0) { timeLeft = 0; endGame(); }
+      if (now - lastSpawn > spawnEvery) spawnWave(now);
+
+      // physics
+      for (const f of fruits) {
+        f.x += f.vx * dt; f.y += f.vy * dt; f.vy += f.g * dt; f.rot += f.vr * dt;
+      }
+      fruits = fruits.filter(f => !f.sliced && f.y < H + 120 * UNIT);
+
+      // slicing
+      if (tip && prevTip) {
+        const sdx = tip.x - prevTip.x, sdy = tip.y - prevTip.y;
+        const speed = Math.hypot(sdx, sdy) / Math.max(dt, 0.001);
+        if (speed > 550 * UNIT) {
+          let hits = 0;
+          for (const f of fruits) {
+            if (f.sliced) continue;
+            if (segDist(prevTip.x, prevTip.y, tip.x, tip.y, f.x, f.y) < f.r + 16 * UNIT) {
+              sliceFruit(f, sdx, sdy);
+              if (f.rock) {
+                score = Math.max(0, score - 25);
+                shake = 1;
+                boom();
+                addPopup(f.x, f.y, '-25 OUCH 🪨', '#ff5c5c', 52);
+              } else {
+                hits++;
+                slicedTotal++;
+              }
+            }
+          }
+          if (hits) {
+            swoosh();
+            const gain = hits * 10 + (hits > 1 ? hits * 15 : 0);
+            score += gain;
+            const at = trail[trail.length - 1];
+            addPopup(at.x, at.y - 40 * UNIT, hits > 1 ? `COMBO x${hits}! +${gain}` : `+${gain}`, hits > 1 ? '#b6ff2e' : '#29f4ff', hits > 1 ? 56 : 38);
+            bestCombo = Math.max(bestCombo, hits);
+          }
+        }
+      }
+    }
+  }
+  prevTip = tip ? { x: tip.x, y: tip.y } : null;
+
+  // chunks / drops / popups always animate
+  for (const c of chunks) { c.x += c.vx * dt; c.y += c.vy * dt; c.vy += 1.7 * H * dt; c.rot += c.vr * dt; c.life -= dt * 0.9; }
+  chunks = chunks.filter(c => c.life > 0 && c.y < H + 150 * UNIT);
+  for (const d of drops) { d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 1.9 * H * dt; d.life -= dt * 1.6; }
+  drops = drops.filter(d => d.life > 0);
+  for (const p of popups) { p.y -= 60 * UNIT * dt; p.life -= dt * 1.1; }
+  popups = popups.filter(p => p.life > 0);
+  shake = Math.max(0, shake - dt * 3.5);
+
+  updateDwell(now);
+  draw(now);
+  if (recCtx) recCtx.drawImage(canvas, 0, 0, recCanvas.width, recCanvas.height);
+}
+
+// =====================================================================
+// Rendering
+// =====================================================================
+function draw(now) {
+  ctx.save();
+  if (shake > 0) ctx.translate((Math.random() - 0.5) * 26 * shake, (Math.random() - 0.5) * 26 * shake);
+
+  // camera background (mirrored, cover) or dark bg in pointer mode
+  ctx.fillStyle = '#0a0a12';
+  ctx.fillRect(-30, -30, W + 60, H + 60);
+  if (!pointerMode && cam.videoWidth) {
+    const scale = Math.max(W / cam.videoWidth, H / cam.videoHeight);
+    const dw = cam.videoWidth * scale, dh = cam.videoHeight * scale;
+    ctx.save();
+    ctx.translate(W, 0); ctx.scale(-1, 1);
+    ctx.globalAlpha = 0.55;
+    ctx.drawImage(cam, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    ctx.restore();
+    ctx.fillStyle = '#0a0a1266';
+    ctx.fillRect(-30, -30, W + 60, H + 60);
+  }
+
+  // fruit
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const f of fruits) {
+    ctx.save();
+    ctx.translate(f.x, f.y); ctx.rotate(f.rot);
+    ctx.font = `${f.r * 2}px serif`;
+    if (f.rock) { ctx.shadowColor = '#ff5c5c'; ctx.shadowBlur = 22 * UNIT; }
+    ctx.fillText(f.emoji, 0, 0);
+    ctx.restore();
+  }
+  // sliced halves
+  for (const c of chunks) {
+    ctx.save();
+    ctx.translate(c.x, c.y); ctx.rotate(c.rot);
+    ctx.globalAlpha = Math.min(1, c.life * 1.4);
+    ctx.beginPath();
+    const a = c.clipAng;
+    ctx.rotate(a);
+    ctx.rect(-c.r * 1.4, c.side < 0 ? -c.r * 1.4 : 0, c.r * 2.8, c.r * 1.4);
+    ctx.clip();
+    ctx.rotate(-a);
+    ctx.font = `${c.r * 2}px serif`;
+    ctx.fillText(c.emoji, 0, 0);
+    ctx.restore();
+  }
+  // juice
+  for (const d of drops) {
+    ctx.globalAlpha = Math.max(0, d.life);
+    ctx.fillStyle = d.color;
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, 6.3); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // blade trail
+  if (trail.length > 1) {
+    for (let pass = 0; pass < 2; pass++) {
+      ctx.beginPath();
+      ctx.moveTo(trail[0].x, trail[0].y);
+      for (let i = 1; i < trail.length; i++) ctx.lineTo(trail[i].x, trail[i].y);
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      if (pass === 0) {
+        ctx.strokeStyle = '#29f4ff44'; ctx.lineWidth = 20 * UNIT;
+        ctx.shadowColor = '#29f4ff'; ctx.shadowBlur = 24 * UNIT;
+      } else {
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 5 * UNIT; ctx.shadowBlur = 0;
+      }
+      ctx.stroke();
+    }
+  }
+  // fingertip reticle
+  const tip = pointerMode ? pointerTip : fingertip;
+  if (tip && !pointerMode) {
+    ctx.strokeStyle = '#29f4ff'; ctx.lineWidth = 2.5 * UNIT;
+    ctx.beginPath(); ctx.arc(tip.x, tip.y, 14 * UNIT, 0, 6.3); ctx.stroke();
+  }
+
+  // popups
+  for (const p of popups) {
+    ctx.globalAlpha = Math.min(1, p.life * 1.6);
+    ctx.font = `${p.size}px Bangers, cursive`;
+    ctx.fillStyle = p.color;
+    ctx.strokeStyle = '#0a0a12'; ctx.lineWidth = p.size / 8;
+    ctx.strokeText(p.text, p.x, p.y);
+    ctx.fillText(p.text, p.x, p.y);
+  }
+  ctx.globalAlpha = 1;
+
+  // HUD
+  if (state === S.PLAY || state === S.COUNTDOWN) {
+    ctx.font = `${52 * UNIT}px Bangers, cursive`;
+    ctx.textAlign = 'left';
+    ctx.strokeStyle = '#0a0a12'; ctx.lineWidth = 7 * UNIT;
+    ctx.fillStyle = '#fff';
+    ctx.strokeText(score, 26 * UNIT, 52 * UNIT);
+    ctx.fillText(score, 26 * UNIT, 52 * UNIT);
+
+    const sec = Math.ceil(timeLeft);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = timeLeft <= 5.2 ? '#ff2e88' : '#29f4ff';
+    ctx.strokeText(sec + 's', W - 70 * UNIT, 52 * UNIT);
+    ctx.fillText(sec + 's', W - 70 * UNIT, 52 * UNIT);
+    ctx.textAlign = 'center';
+  }
+  if (state === S.COUNTDOWN) {
+    const left = Math.max(0, countdownEnd - now);
+    const wait = !pointerMode && !tracking && !handSeen;
+    ctx.font = `${(wait ? 44 : 150) * UNIT}px Bangers, cursive`;
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#ff2e88'; ctx.lineWidth = 10 * UNIT;
+    const msg = wait ? '✋ SHOW ME YOUR HAND' : String(Math.ceil(left / 1000));
+    ctx.strokeText(msg, W / 2, H / 2);
+    ctx.fillText(msg, W / 2, H / 2);
+  }
+  if (state === S.PLAY && !pointerMode && !tracking) {
+    ctx.font = `${44 * UNIT}px Bangers, cursive`;
+    ctx.fillStyle = '#ffe32e';
+    ctx.strokeStyle = '#0a0a12'; ctx.lineWidth = 8 * UNIT;
+    ctx.strokeText('✋ HAND LOST — PAUSED', W / 2, H / 2);
+    ctx.fillText('✋ HAND LOST — PAUSED', W / 2, H / 2);
+  }
+  ctx.restore();
+}
+
+// =====================================================================
+// Input: pointer fallback mode
+// =====================================================================
+let pointerTip = null;
+canvas.addEventListener('pointermove', e => {
+  if (!pointerMode) return;
+  pointerTip = { x: e.clientX * devicePixelRatio, y: e.clientY * devicePixelRatio };
+});
+canvas.addEventListener('pointerleave', () => { pointerTip = null; });
+
+// =====================================================================
+// Boot
+// =====================================================================
+async function bootCamera() {
+  const status = $('boot-status');
+  status.classList.remove('err');
+  try {
+    status.textContent = 'requesting camera…';
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false,
+    });
+    cam.srcObject = stream;
+    await cam.play();
+    status.textContent = 'loading LiteRT.js…';
+    await loadLiteRt(WASM_DIR);
+    const accel = isWebGPUSupported() ? 'webgpu' : 'wasm';
+    status.textContent = `compiling hand tracker (${accel})…`;
+    try { model = await loadAndCompile(MODEL_URL, { accelerator: accel }); }
+    catch { model = await loadAndCompile(MODEL_URL, { accelerator: 'wasm' }); }
+    resetRoi();
+    inferLoop();
+    $('boot').classList.add('gone');
+    startGame();
+  } catch (e) {
+    console.error(e);
+    status.textContent = 'FAILED: ' + e.message + ' — try the mouse mode below';
+    status.classList.add('err');
+  }
+}
+$('engage').onclick = () => { audio(); bootCamera(); };
+$('pointer-mode').onclick = () => {
+  audio();
+  pointerMode = true;
+  $('boot').classList.add('gone');
+  startGame();
+};
+
+requestAnimationFrame(loop);
+
+// =====================================================================
+// Boot-screen leaderboard preview — shows real players' captured clips so
+// it's clear up front that posting publishes your webcam footage
+// =====================================================================
+async function loadWallPreview() {
+  try {
+    const { runs } = await listPage(USE_EMULATOR, { pageSize: 4 });
+    if (!runs.length) { window.__wallPreviewCount = 0; return; }
+    const strip = $('wp-strip');
+    strip.innerHTML = '';
+    for (let i = 0; i < runs.length; i++) {
+      const r = runs[i];
+      const card = document.createElement('div');
+      card.className = 'wp-card' + (i < 3 ? ` r${i + 1}` : '');
+      card.innerHTML = `
+        <span class="wp-live">● REC</span>
+        <video muted loop playsinline preload="metadata"></video>
+        <div class="wp-badge"><span class="wp-rank">#${i + 1}</span><span class="wp-pts">${r.score}<small> pts</small></span></div>`;
+      const vid = card.querySelector('video');
+      getUrl(r.item).then(u => { vid.src = u; vid.play().catch(() => {}); }).catch(() => {});
+      card.addEventListener('click', () => { location.href = WALL_URL; });
+      strip.appendChild(card);
+    }
+    $('wallpreview').style.display = '';
+    window.__wallPreviewCount = runs.length;
+  } catch (e) {
+    console.warn('wall preview unavailable', e);
+    window.__wallPreviewCount = 0;
+  }
+}
+loadWallPreview();
+
+// debug/testing handle (read-only)
+Object.defineProperty(window, '__airslice', {
+  value: {
+    get state() { return state; },
+    get score() { return score; },
+    get fruits() { return fruits.length; },
+    get tracking() { return tracking; },
+    get slicedTotal() { return slicedTotal; },
+    get recordedBytes() { return recordedBlob ? recordedBlob.size : 0; },
+    get uploaded() { return uploaded; },
+    get timeLeft() { return timeLeft; },
+    get confirmOpen() { return confirmOpen; },
+  },
+});
+</script>
+</body>
+</html>

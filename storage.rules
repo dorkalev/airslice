@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// AIRSLICE public wall. Anyone may watch runs. Uploads require an (anonymous)
+// signed-in user, must be a reasonably-sized video, and are stamped with the
+// uploader's uid as `owner` — only that uid can delete. Players consent
+// explicitly in the game UI before upload.
+//
+// This limits what a single request can do, but rules cannot rate-limit across
+// requests. Enable Firebase App Check enforcement on Storage (see
+// leaderboard.js APPCHECK_SITE_KEY) to keep scripted/bot uploads out, and set a
+// GCP budget alert as a backstop.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /runs/{file} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.resource.size < 25 * 1024 * 1024
+                    && request.resource.contentType.matches('video/(webm|mp4)(;.*)?')
+                    && request.resource.metadata.owner == request.auth.uid;
+      allow delete: if request.auth != null
+                    && resource.metadata.owner == request.auth.uid;
+      allow update: if false;
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

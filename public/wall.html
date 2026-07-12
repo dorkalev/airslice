@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THE WALL — AIRSLICE leaderboard</title>
+<meta name="description" content="Top AIRSLICE runs — watch players slice flying fruit in mid-air with their bare hands.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Fragment+Mono&display=swap" rel="stylesheet">
+<style>
+  :root { --hot: #ff2e88; --cyan: #29f4ff; --lime: #b6ff2e; --bg: #0a0a12; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: #fff; font-family: 'Fragment Mono', monospace; min-height: 100vh; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 30px 20px 60px; }
+  header { text-align: center; margin-bottom: 30px; }
+  .title {
+    font-family: 'Bangers', cursive;
+    font-size: clamp(52px, 9vw, 100px); line-height: .95;
+    text-shadow: 4px 4px 0 var(--hot), 8px 8px 0 #7a0b3d, 0 0 60px #ff2e8855;
+    transform: rotate(-2deg);
+  }
+  .title .gold { color: #ffd24f; text-shadow: 4px 4px 0 #8a6b0e, 8px 8px 0 #4a3a06, 0 0 60px #ffd24f66; }
+  .sub { color: #9aa; font-size: 12px; margin-top: 12px; }
+  .backlink {
+    display: inline-block; margin-top: 16px;
+    font-family: 'Bangers', cursive; font-size: 22px; letter-spacing: .05em;
+    color: #0a0a12; background: var(--lime); text-decoration: none;
+    padding: 10px 26px; border-radius: 10px;
+    box-shadow: 0 4px 0 #5c8a0e;
+    transform: rotate(-1deg);
+  }
+  .backlink:hover { transform: rotate(-1deg) scale(1.05); }
+
+  #status { text-align: center; color: #9aa; font-size: 13px; padding: 40px 0; line-height: 2; }
+  #status.err { color: var(--hot); }
+
+  .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px; }
+  .run {
+    background: #12121e; border: 1px solid #ffffff14; border-radius: 16px;
+    overflow: hidden; position: relative;
+    transition: transform .15s, box-shadow .15s;
+  }
+  .run:hover { transform: translateY(-3px); box-shadow: 0 14px 40px #000a, 0 0 30px #29f4ff22; }
+  .run video { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block; background: #000; }
+  .run .meta { padding: 12px 16px 14px; display: flex; align-items: baseline; gap: 12px; }
+  .rank {
+    font-family: 'Bangers', cursive; font-size: 34px; color: #9aa;
+    min-width: 46px;
+  }
+  .run.top1 .rank { color: #ffd24f; text-shadow: 2px 2px 0 #8a6b0e; }
+  .run.top2 .rank { color: #cfd6e0; text-shadow: 2px 2px 0 #5a616b; }
+  .run.top3 .rank { color: #e09a5a; text-shadow: 2px 2px 0 #6b4a2a; }
+  .pts { font-family: 'Bangers', cursive; font-size: 40px; color: var(--cyan); text-shadow: 2px 2px 0 #0b4a7a; }
+  .pts small { font-size: 18px; color: #9aa; text-shadow: none; }
+  .stats { margin-left: auto; text-align: right; font-size: 10px; color: #778; line-height: 1.7; }
+  .crown { position: absolute; top: 10px; left: 12px; font-size: 30px; filter: drop-shadow(0 2px 6px #000); }
+  .rm {
+    position: absolute; top: 8px; right: 8px;
+    font-family: 'Fragment Mono', monospace; font-size: 10px;
+    background: #000000aa; color: #ff8aa8; border: 1px solid #ff2e8855;
+    border-radius: 8px; padding: 5px 9px; cursor: pointer;
+  }
+  .rm:hover { background: #7a0b3d; color: #fff; }
+  .vidwrap { position: relative; }
+  .vidwrap .poster {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    background: linear-gradient(135deg, #16162a, #0c0c16);
+    color: #4a5568; font-size: 30px; pointer-events: none;
+    transition: opacity .2s;
+  }
+  .vidwrap.playing .poster { opacity: 0; }
+  .run:not(.autoplay) .vidwrap::after {
+    content: 'hover to play ▸'; position: absolute; bottom: 8px; left: 50%;
+    transform: translateX(-50%); font-size: 10px; color: #9aa;
+    background: #000000aa; padding: 3px 8px; border-radius: 6px; pointer-events: none;
+    transition: opacity .2s;
+  }
+  .run.autoplay .vidwrap::after, .vidwrap.playing::after { opacity: 0; }
+  #sentinel { height: 40px; }
+  #more { text-align: center; color: #778; font-size: 12px; padding: 20px 0 40px; }
+  #more.err { color: var(--hot); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title">THE <span class="gold">WALL</span> 🏆</div>
+    <div class="sub">top runs, posted by players — bare hands only, no take-backs</div>
+    <a class="backlink" href="./">◂ GRAB THE BLADE</a>
+  </header>
+  <div id="status">summoning the champions…</div>
+  <div class="board" id="board"></div>
+  <div id="sentinel"></div>
+  <div id="more"></div>
+</div>
+
+<script type="module">
+import { listPage, getUrl, deleteRun, isMine, forgetMine } from './leaderboard.js';
+const USE_EMULATOR = new URLSearchParams(location.search).has('emu');
+const PAGE = 12;          // runs fetched per scroll
+const AUTOPLAY_TOP = 3;   // top N autoplay; the rest load on hover
+const status = document.getElementById('status');
+const board = document.getElementById('board');
+const moreEl = document.getElementById('more');
+
+let rank = 0, pageToken = null, loading = false, done = false;
+
+function makeCard(r) {
+  rank++;
+  const i = rank;
+  const auto = i <= AUTOPLAY_TOP;
+  const card = document.createElement('div');
+  card.className = 'run' + (i <= 3 ? ` top${i}` : '') + (auto ? ' autoplay' : '');
+  card.innerHTML = `
+    ${i === 1 ? '<div class="crown">👑</div>' : ''}
+    <div class="vidwrap"><div class="poster">${auto ? '▶' : '🍉'}</div>
+      <video preload="none" playsinline loop muted ${auto ? '' : 'controls'}></video></div>
+    <div class="meta">
+      <span class="rank">#${i}</span>
+      <span class="pts">${r.score}<small> pts</small></span>
+      <span class="stats">${r.sliced} sliced<br>combo x${r.combo}</span>
+    </div>`;
+  const wrap = card.querySelector('.vidwrap');
+  const vid = card.querySelector('video');
+  let urlP = null;
+  const ensureUrl = () => (urlP ||= getUrl(r.item).then(u => { vid.src = u; return u; }).catch(() => { urlP = null; }));
+
+  if (auto) {
+    ensureUrl().then(() => { vid.play().catch(() => {}); });
+    vid.addEventListener('playing', () => wrap.classList.add('playing'), { once: true });
+  } else {
+    const enter = async () => { await ensureUrl(); try { await vid.play(); wrap.classList.add('playing'); } catch {} };
+    wrap.addEventListener('mouseenter', enter);
+    wrap.addEventListener('mouseleave', () => vid.pause());
+    // touch: tap to load+play, tap again pauses (controls also present)
+    wrap.addEventListener('click', () => { if (vid.paused) enter(); });
+  }
+
+  if (isMine(r.path)) {
+    const rm = document.createElement('button');
+    rm.className = 'rm';
+    rm.textContent = '🗑 my run — remove';
+    let armed = 0;
+    rm.onclick = async (e) => {
+      e.stopPropagation();
+      if (Date.now() - armed > 3000) {
+        armed = Date.now();
+        rm.textContent = 'SURE? click again 🗑';
+        setTimeout(() => { rm.isConnected && (rm.textContent = '🗑 my run — remove'); }, 3000);
+        return;
+      }
+      try { rm.textContent = 'removing…'; await deleteRun(r.item); forgetMine(r.path); card.remove(); }
+      catch (err) { rm.textContent = 'failed: ' + (err.code || err.message); }
+    };
+    card.appendChild(rm);
+  }
+  board.appendChild(card);
+}
+
+async function loadMore() {
+  if (loading || done) return;
+  loading = true;
+  moreEl.textContent = 'loading…';
+  try {
+    const { runs, nextPageToken } = await listPage(USE_EMULATOR, { pageToken, pageSize: PAGE });
+    runs.forEach(makeCard);
+    pageToken = nextPageToken;
+    if (rank === 0) { status.textContent = 'the wall is empty. be the first name on it.'; done = true; }
+    else status.style.display = 'none';
+    if (!pageToken) { done = true; moreEl.textContent = rank ? "that's the whole wall 🏁" : ''; }
+    else moreEl.textContent = '';
+  } catch (e) {
+    console.error(e);
+    moreEl.className = 'err';
+    moreEl.innerHTML = 'the wall is unreachable right now.<br>' +
+      (e.code === 'storage/unknown' || e.status === 404
+        ? '(storage bucket not provisioned yet — enable Storage in the Firebase console)'
+        : (e.code || e.message));
+    done = true;
+  } finally {
+    loading = false;
+  }
+}
+
+// Keep loading while the sentinel stays in view — covers the case where a
+// page is shorter than the viewport (a single new IntersectionObserver event
+// wouldn't re-fire otherwise).
+let sentinelVisible = false, pumping = false;
+async function pump() {
+  if (pumping) return;
+  pumping = true;
+  while (sentinelVisible && !loading && !done) await loadMore();
+  pumping = false;
+}
+const io = new IntersectionObserver(entries => {
+  sentinelVisible = entries[0].isIntersecting;
+  if (sentinelVisible) pump();
+}, { rootMargin: '600px' });
+io.observe(document.getElementById('sentinel'));
+
+await loadMore();  // first page
+pump();            // fill the viewport if the first page didn't
+window.__wallRank = () => rank;
+</script>
+</body>
+</html>
