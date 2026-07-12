@@ -9,9 +9,13 @@ const { logger } = require("firebase-functions/v2");
 
 const NOTIFY_WEBHOOK_URL = defineSecret("NOTIFY_WEBHOOK_URL");
 const BUCKET = "YOUR_PROJECT.firebasestorage.app";
+// NOTE: the function region MUST match your bucket's region (check it in the
+// Firebase console → Storage). A mismatch fails with "cannot listen to a bucket
+// in region ...".
+const REGION = "us-central1";
 
 exports.notifyOnUpload = onObjectFinalized(
-  { bucket: BUCKET, secrets: [NOTIFY_WEBHOOK_URL], region: "us-central1", memory: "128MiB" },
+  { bucket: BUCKET, secrets: [NOTIFY_WEBHOOK_URL], region: REGION, memory: "128MiB" },
   async (event) => {
     const path = event.data.name || "";
     if (!path.startsWith("runs/")) return;
