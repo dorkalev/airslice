@@ -3,17 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<script>
-// Optional canonical-domain guard: set CANON to your domain to funnel every
-// other host to it (keeping the full route). Blank = disabled.
-(function () {
-  var CANON = ''; // set to your own domain to enforce a canonical host
-  var ALLOW = [CANON, 'localhost', '127.0.0.1'];
-  if (CANON && ALLOW.indexOf(location.hostname) < 0) {
-    location.replace('https://' + CANON + location.pathname + location.search + location.hash);
-  }
-})();
-</script>
 <title>AIRSLICE — slice fruit with your bare hands</title>
 <meta name="description" content="Slice flying fruit in mid-air with your BARE HANDS. Your webcam tracks your index finger — it becomes the blade. On-device AI hand tracking (LiteRT.js). No mouse, no mercy.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -326,7 +315,13 @@
 <script type="module">
 import { loadLiteRt, loadAndCompile, Tensor, isWebGPUSupported }
   from 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.2/+esm';
-import { getFirebase, listPage, getUrl, getPosterUrl, uploadPoster, deletePoster, getPreviewUrl, uploadPreview, deletePreview, encodeRunName, rememberMine, forgetMine, isMine, deleteRun, parseRunName } from './leaderboard.js';
+import { getFirebase, listPage, getUrl, getPosterUrl, uploadPoster, deletePoster, getPreviewUrl, uploadPreview, deletePreview, encodeRunName, rememberMine, forgetMine, isMine, deleteRun, parseRunName, CANON_HOST } from './leaderboard.js';
+
+// Canonical-domain guard: send other hosts to the canonical domain, keeping the
+// full route. Runs first thing (blank CANON_HOST disables it — e.g. forks).
+if (CANON_HOST && ![CANON_HOST, 'localhost', '127.0.0.1'].includes(location.hostname)) {
+  location.replace('https://' + CANON_HOST + location.pathname + location.search + location.hash);
+}
 
 const MODEL_URL = './hand_landmark_full.tflite';
 const WASM_DIR = 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.2/wasm/';

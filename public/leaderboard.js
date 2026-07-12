@@ -7,18 +7,9 @@
 // That lets the wall paginate (infinite scroll) instead of downloading every
 // file's metadata up front — it never fetches more than one page at a time.
 
-export const FIREBASE_CONFIG = {
-  apiKey: 'YOUR_API_KEY',
-  authDomain: 'YOUR_PROJECT.firebaseapp.com',
-  projectId: 'YOUR_PROJECT',
-  storageBucket: 'YOUR_PROJECT.firebasestorage.app',
-  appId: 'YOUR_APP_ID',
-};
-
-// To turn on bot protection: create a reCAPTCHA v3 site key, register it under
-// Firebase App Check for this web app, paste it here, then enable enforcement
-// on Storage in the console. Left empty = App Check disabled (uploads still work).
-export const APPCHECK_SITE_KEY = '';
+// deployment-specific values live in config.js (real) / config.example.js (placeholder)
+export { FIREBASE_CONFIG, APPCHECK_SITE_KEY, CANON_HOST, ADMIN_EMAIL } from './config.js';
+import { FIREBASE_CONFIG, APPCHECK_SITE_KEY } from './config.js';
 
 const MAX_SCORE = 9_999_999;
 const SCORE_PAD = 7;

@@ -77,11 +77,10 @@
 </div>
 
 <script type="module">
-import { getFirebase, listPage, getUrl, getPosterUrl, getPreviewUrl, deleteRun, archiveRun, deletePoster, deletePreview } from './leaderboard.js';
+import { getFirebase, listPage, getUrl, getPosterUrl, getPreviewUrl, deleteRun, archiveRun, deletePoster, deletePreview, ADMIN_EMAIL } from './leaderboard.js';
 import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
-const ADMIN_EMAIL = 'YOUR_ADMIN_EMAIL@example.com';
 const USE_EMULATOR = new URLSearchParams(location.search).has('emu');
 const $ = id => document.getElementById(id);
 

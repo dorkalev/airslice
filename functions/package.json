@@ -5,6 +5,7 @@
   "main": "index.js",
   "private": true,
   "dependencies": {
-    "firebase-functions": "^5.1.0"
+    "firebase-functions": "^5.1.0",
+    "firebase-admin": "^12.6.0"
   }
 }

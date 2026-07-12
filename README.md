@@ -83,8 +83,9 @@ free Spark plan is enough to start).
 
 1. Create a Firebase project. Enable **Storage** and **Anonymous
    Authentication**.
-2. Put your web app's config into `public/leaderboard.js` (`FIREBASE_CONFIG`),
-   and set your project id in `.firebaserc`.
+2. Fill in **`public/config.js`** (Firebase web config, optional App Check site
+   key, canonical host, admin email) and set your project id in `.firebaserc`.
+   All deployment-specific values live in that one file.
 3. Deploy:
    ```bash
    npm i -g firebase-tools
@@ -102,10 +103,15 @@ firebase emulators:start --only storage,auth
 - The Firebase `apiKey` in `leaderboard.js` is a **public client identifier**,
   not a secret — safety comes from the rules, not from hiding it.
 - `storage.rules` restricts uploads to signed-in users, video content types,
-  <25 MB, and stamps each file with the uploader's uid (only that uid can
-  delete). Rules **cannot** rate-limit, so for anything public you should also
-  enable **Firebase App Check** (set `APPCHECK_SITE_KEY` in `leaderboard.js`
-  and turn on enforcement) and set a budget alert.
+  <25 MB, and stamps each file with the uploader's uid (only that uid or the
+  admin can delete) — all **server-enforced**, not client trust.
+- Rules **cannot** rate-limit, so the Cloud Function enforces a **per-uploader
+  daily cap** server-side (a counter object under `counters/`; over-cap uploads
+  are deleted). Also enable **Firebase App Check** (set `APPCHECK_SITE_KEY` in
+  `config.js`, register the reCAPTCHA secret, then Monitor → Enforce) and set a
+  budget alert.
+- Client-side bits (canonical redirect, "my run" ownership UI) are UX only —
+  never rely on them for security.
 
 ---
 
