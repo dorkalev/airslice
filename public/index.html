@@ -356,8 +356,16 @@ addEventListener('resize', resize);
 // =====================================================================
 let AC = null, muted = false;
 function audio() {
-  if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
-  if (AC.state === 'suspended') AC.resume();   // browsers start it suspended until a gesture
+  if (!AC) {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    // iOS/Safari can drop the context to 'suspended' or 'interrupted' (silent
+    // switch, phone call, tab switch) — recover automatically, and resume music
+    AC.onstatechange = () => {
+      if (AC.state !== 'running') AC.resume().catch(() => {});
+      else if (!muted) music.start();
+    };
+  }
+  if (AC.state !== 'running') AC.resume().catch(() => {});
   return AC;
 }
 // satisfying blade "slash": a bandpass noise whoosh sweeping high→low + a short
@@ -470,16 +478,30 @@ $('mute').onclick = () => {
   if (muted) music.stop(); else music.start();   // ambient — plays whenever unmuted
 };
 
-// Ambient music: unlock + start on ANY user gesture (browsers block audio until
-// then). Every gesture retries — resume() is async, so we start the music only
-// once the context is actually running; music.start() is idempotent.
+// Ambient music: unlock + start on ANY user gesture. The reliable cross-browser
+// unlock (per howler.js) is to *play a short silent buffer* inside the gesture —
+// resume() alone doesn't unlock Web Audio on iOS/Safari. Every gesture retries;
+// music.start() is idempotent.
+let audioUnlocked = false;
 function unlockAudio() {
   const ac = audio();                              // create (in-gesture) + resume
-  if (ac.state === 'running') { if (!muted) music.start(); return; }
-  ac.resume().then(() => { if (!muted) music.start(); }).catch(() => {});
+  if (!audioUnlocked) {
+    try {
+      const s = ac.createBufferSource();
+      s.buffer = ac.createBuffer(1, 1, 22050);     // 1-sample silent buffer
+      s.connect(ac.destination); s.start(0);
+      audioUnlocked = true;
+    } catch {}
+  }
+  const go = () => { if (!muted) music.start(); };
+  if (ac.state === 'running') go(); else ac.resume().then(go).catch(() => {});
 }
 ['pointerdown', 'pointerup', 'click', 'touchend', 'keydown'].forEach(ev =>
   addEventListener(ev, unlockAudio, { passive: true }));
+// resume when returning to the tab (context often suspends while hidden)
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && AC && AC.state !== 'running') AC.resume().catch(() => {});
+});
 
 // =====================================================================
 // Hand tracking (LiteRT.js) — same engine as the AIR·HAND demo
