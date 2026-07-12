@@ -8,7 +8,7 @@ tracking runs **100% on-device in the browser** via
 machine unless *you* choose to post a clip to the leaderboard.
 
 ▶️ **Play (with the 🏆 leaderboard right on the page):**
-https://dorkalev-website.web.app/airslice/
+https://airslice.dorkalev.com/
 
 ## How it plays
 
