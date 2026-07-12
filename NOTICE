@@ -1,8 +1,8 @@
 AIRSLICE — third-party components
 ==================================
 
-This project's own source code (index.html, wall.html, leaderboard.js) is
-licensed under the MIT License (see LICENSE).
+This project's own source code (index.html, leaderboard.js) is licensed under
+the MIT License (see LICENSE).
 
 It also uses and, where noted, redistributes the following third-party
 components under their respective licenses:

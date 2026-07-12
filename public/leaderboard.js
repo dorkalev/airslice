@@ -1,6 +1,6 @@
-// Shared AIRSLICE leaderboard data layer — used by both the game (index.html)
-// and the full wall (wall.html). One place for Firebase config, App Check,
-// run-name encoding, and paginated fetching.
+// Shared AIRSLICE leaderboard data layer used by the game (index.html).
+// One place for Firebase config, App Check, run-name encoding, and paginated
+// fetching.
 //
 // SCALE: runs are named with an inverted, zero-padded score prefix so that
 // Storage's lexicographic list() returns them already ranked highest-first.
