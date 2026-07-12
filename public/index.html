@@ -470,16 +470,16 @@ $('mute').onclick = () => {
   if (muted) music.stop(); else music.start();   // ambient — plays whenever unmuted
 };
 
-// Kick off ambient background music on the FIRST user interaction anywhere on
-// the page (browsers block audio until a gesture). Fires once.
-let musicKicked = false;
-function kickMusic() {
-  if (musicKicked || muted) return;
-  musicKicked = true;
-  audio(); music.start();
+// Ambient music: unlock + start on ANY user gesture (browsers block audio until
+// then). Every gesture retries — resume() is async, so we start the music only
+// once the context is actually running; music.start() is idempotent.
+function unlockAudio() {
+  const ac = audio();                              // create (in-gesture) + resume
+  if (ac.state === 'running') { if (!muted) music.start(); return; }
+  ac.resume().then(() => { if (!muted) music.start(); }).catch(() => {});
 }
-['pointerdown', 'touchstart', 'keydown'].forEach(ev =>
-  addEventListener(ev, kickMusic, { passive: true }));
+['pointerdown', 'pointerup', 'click', 'touchend', 'keydown'].forEach(ev =>
+  addEventListener(ev, unlockAudio, { passive: true }));
 
 // =====================================================================
 // Hand tracking (LiteRT.js) — same engine as the AIR·HAND demo
