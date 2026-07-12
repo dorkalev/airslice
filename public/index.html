@@ -4,9 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <script>
-// Canonical-domain guard: funnel every other host (incl. airslice-5b3e3.web.app)
-// to airslice.dorkalev.com, keeping the full route (path + query + hash).
-// localhost stays allow-listed for dev. CANON = '' disables it (OSS forks).
+// Optional canonical-domain guard: set CANON to your domain to funnel every
+// other host to it (keeping the full route). Blank = disabled.
 (function () {
   var CANON = ''; // set to your own domain to enforce a canonical host
   var ALLOW = [CANON, 'localhost', '127.0.0.1'];
