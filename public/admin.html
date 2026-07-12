@@ -12,18 +12,29 @@
   :root { --hot:#ff2e88; --cyan:#29f4ff; --lime:#b6ff2e; --bg:#0a0a12; }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { background:var(--bg); color:#fff; font-family:'Fragment Mono',monospace; min-height:100vh; }
-  .wrap { max-width:1100px; margin:0 auto; padding:30px 20px 60px; }
+  .wrap { max-width:1100px; margin:0 auto; padding:40px 20px 60px; }
   .title { font-family:'Bangers',cursive; font-size:clamp(40px,7vw,72px); text-shadow:3px 3px 0 var(--hot),6px 6px 0 #7a0b3d; transform:rotate(-2deg); }
-  .sub { color:#9aa; font-size:12px; margin:10px 0 22px; }
-  .btn { font-family:'Bangers',cursive; font-size:22px; letter-spacing:.04em; color:#0a0a12; background:var(--lime); border:none; border-radius:12px; padding:12px 28px; cursor:pointer; box-shadow:0 4px 0 #5c8a0e; }
+  .btn { font-family:'Bangers',cursive; font-size:22px; letter-spacing:.04em; color:#0a0a12; background:var(--lime); border:none; border-radius:12px; padding:12px 28px; cursor:pointer; box-shadow:0 4px 0 #5c8a0e; margin-top:20px; }
   .btn:hover { transform:scale(1.03); }
-  .who { font-size:12px; color:#9aa; margin:14px 0; }
+  .who { font-size:12px; color:#9aa; margin-top:16px; }
   .who b { color:var(--cyan); font-weight:400; }
   .who a { color:var(--hot); cursor:pointer; }
-  #gate.err { color:var(--hot); }
-  .board { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; margin-top:20px; }
+  #gate.err .who { color:var(--hot); }
+
+  .controls { display:flex; align-items:center; gap:8px; margin:22px 0 6px; flex-wrap:wrap; }
+  .clabel { font-size:11px; color:#778; letter-spacing:.1em; text-transform:uppercase; }
+  .sortbtn { font-family:'Fragment Mono',monospace; font-size:12px; color:#9aa; background:#12121e; border:1px solid #ffffff1c; border-radius:9px; padding:7px 13px; cursor:pointer; }
+  .sortbtn:hover { color:#fff; }
+  .sortbtn.active { color:#0a0a12; background:var(--cyan); border-color:var(--cyan); }
+  .count { margin-left:auto; font-size:11px; color:#778; }
+  .back { color:var(--cyan); font-size:12px; text-decoration:none; }
+
+  .board { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; margin-top:12px; }
   .run { background:#12121e; border:1px solid #ffffff14; border-radius:14px; overflow:hidden; position:relative; }
+  .vidwrap { position:relative; }
   .run video { width:100%; aspect-ratio:4/3; object-fit:cover; display:block; background:#000; }
+  .poster { position:absolute; inset:0; display:grid; place-items:center; background:linear-gradient(135deg,#16162a,#0c0c16); color:#4a5568; font-size:26px; pointer-events:none; transition:opacity .2s; }
+  .vidwrap.playing .poster { opacity:0; }
   .run .meta { padding:9px 12px 11px; display:flex; align-items:baseline; gap:9px; }
   .pts { font-family:'Bangers',cursive; font-size:26px; color:var(--cyan); text-shadow:2px 2px 0 #0b4a7a; }
   .pts small { font-size:12px; color:#9aa; text-shadow:none; }
@@ -35,23 +46,34 @@
   .archive:hover { background:#8a6b0e; color:#fff; }
   .kill { color:#ff8aa8; border:1px solid #ff2e8855; }
   .kill:hover { background:#7a0b3d; color:#fff; }
+  .rankn { position:absolute; top:8px; left:10px; z-index:2; font-family:'Bangers',cursive; font-size:18px; color:#fff; text-shadow:0 1px 4px #000; }
   #more { color:#778; font-size:12px; padding:18px 0; min-height:20px; }
   #sentinel { height:30px; }
-  .hover-hint { position:absolute; bottom:6px; left:50%; transform:translateX(-50%); font-size:9px; color:#9aa; background:#000000aa; padding:2px 7px; border-radius:6px; pointer-events:none; }
-  a.back { color:var(--cyan); font-size:12px; text-decoration:none; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="title">MODERATION 🛡️</div>
-  <div class="sub">delete bad clips from the wall · <a class="back" href="./">← back to the game</a></div>
+
+  <!-- until the admin is signed in, this is ALL that shows -->
   <div id="gate">
     <button class="btn" id="signin">Sign in with Google</button>
     <div class="who" id="who"></div>
   </div>
-  <div class="board" id="board"></div>
-  <div id="sentinel"></div>
-  <div id="more"></div>
+
+  <!-- revealed only for the admin -->
+  <div id="adminui" style="display:none">
+    <div class="controls">
+      <span class="clabel">sort</span>
+      <button class="sortbtn active" data-sort="score">🏆 top score</button>
+      <button class="sortbtn" data-sort="recent">🕒 most recent</button>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="board" id="board"></div>
+    <div id="sentinel"></div>
+    <div id="more"></div>
+    <a class="back" href="./">← back to the game</a>
+  </div>
 </div>
 
 <script type="module">
@@ -63,84 +85,109 @@ const ADMIN_EMAIL = 'YOUR_ADMIN_EMAIL@example.com';
 const USE_EMULATOR = new URLSearchParams(location.search).has('emu');
 const $ = id => document.getElementById(id);
 
-const { auth } = await getFirebase(USE_EMULATOR);   // (also signs in anon; Google overrides it)
+const { auth } = await getFirebase(USE_EMULATOR);  // (also signs in anon; Google overrides it)
 let loaded = false;
 
 $('signin').onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch(e => {
-  $('who').textContent = 'sign-in failed: ' + (e.code || e.message);
   $('gate').classList.add('err');
+  $('who').textContent = 'sign-in failed: ' + (e.code || e.message);
 });
 
 onAuthStateChanged(auth, user => {
   const isAdmin = user && user.email === ADMIN_EMAIL && user.emailVerified;
+  // default: locked — nothing but the sign-in button
+  $('adminui').style.display = 'none';
+  $('gate').classList.remove('err');
   if (isAdmin) {
     $('signin').style.display = 'none';
-    $('gate').classList.remove('err');
     $('who').innerHTML = `signed in as <b>${user.email}</b> — <a id="out">sign out</a>`;
     $('out').onclick = () => signOut(auth).then(() => location.reload());
-    if (!loaded) { loaded = true; loadAll(); }
+    $('adminui').style.display = '';
+    if (!loaded) { loaded = true; fetchAll(); }
   } else if (user && user.email) {
+    // signed in, but NOT the admin → reveal nothing
+    $('signin').style.display = 'none';
     $('gate').classList.add('err');
-    $('who').innerHTML = `signed in as ${user.email} — not an admin. <a id="out">sign out</a>`;
+    $('who').innerHTML = `signed in as ${user.email} — not authorized. <a id="out">sign out</a>`;
     $('out').onclick = () => signOut(auth).then(() => location.reload());
   } else {
-    $('who').textContent = 'admins only — moderate clips reported as inappropriate.';
+    $('signin').style.display = '';
+    $('who').textContent = '';
   }
 });
 
-// ---- list every run with a delete button ----
-const board = $('board'), moreEl = $('more');
-let token = null, loading = false, done = false, n = 0;
+// ---- data: fetch every run once (names only — cheap), sort client-side ----
+const board = $('board'), moreEl = $('more'), sentinel = $('sentinel');
+let ALL = [], sortMode = 'score', shown = 0;
 
-function card(r) {
-  n++;
+function applySort() {
+  ALL.sort(sortMode === 'score'
+    ? (a, b) => b.score - a.score || a.ts - b.ts     // highest score, ties oldest-first
+    : (a, b) => b.ts - a.ts);                         // most recent first
+}
+
+function makeCard(r, rank) {
   const el = document.createElement('div');
   el.className = 'run';
+  const date = new Date(r.ts).toLocaleDateString();
   el.innerHTML = `
-    <video preload="none" playsinline loop muted controls></video>
-    <div class="hover-hint">hover to play ▸</div>
+    <span class="rankn">#${rank}</span>
+    <div class="vidwrap"><div class="poster">🍉</div>
+      <video preload="none" playsinline loop muted controls></video></div>
     <div class="meta"><span class="pts">${r.score}<small> pts</small></span>
-      <span class="stats">#${n} · ${r.sliced} sliced<br>combo x${r.combo}</span></div>
+      <span class="stats">${r.sliced} sliced · x${r.combo}<br>${date}</span></div>
     <div class="modrow"><button class="mod archive">📥 archive</button><button class="mod kill">🗑 delete</button></div>`;
+  const wrap = el.querySelector('.vidwrap');
   const vid = el.querySelector('video');
-  const hint = el.querySelector('.hover-hint');
   let urlP = null;
   const ensure = () => (urlP ||= getUrl(r.item).then(u => { vid.src = u; return u; }).catch(() => { urlP = null; }));
-  el.addEventListener('mouseenter', async () => { await ensure(); vid.play().catch(()=>{}); hint.style.display='none'; });
-  el.addEventListener('mouseleave', () => vid.pause());
-  // two-click confirm on each action
+  wrap.addEventListener('mouseenter', async () => { await ensure(); try { await vid.play(); wrap.classList.add('playing'); } catch {} });
+  wrap.addEventListener('mouseleave', () => vid.pause());
   const wire = (btn, label, run) => {
     let armed = 0;
     btn.onclick = async () => {
-      if (Date.now() - armed > 3000) { armed = Date.now(); btn.textContent = 'SURE?'; setTimeout(()=>{btn.isConnected&&(btn.textContent=label);},3000); return; }
-      try { btn.textContent = '…'; el.querySelectorAll('.mod').forEach(b=>b.disabled=true); await run(); el.remove(); }
+      if (Date.now() - armed > 3000) { armed = Date.now(); btn.textContent = 'SURE?'; setTimeout(() => { btn.isConnected && (btn.textContent = label); }, 3000); return; }
+      try { btn.textContent = '…'; el.querySelectorAll('.mod').forEach(b => b.disabled = true); await run(); el.remove(); }
       catch (e) { btn.disabled = false; btn.textContent = 'failed: ' + (e.code || e.message); }
     };
   };
   wire(el.querySelector('.archive'), '📥 archive', () => archiveRun(r.item));
   wire(el.querySelector('.kill'), '🗑 delete', () => deleteRun(r.item));
-  board.appendChild(el);
+  return el;
 }
 
-async function loadPage() {
-  if (loading || done) return;
-  loading = true; moreEl.textContent = 'loading…';
+function renderMore() {
+  const CHUNK = 24;
+  for (let k = 0; k < CHUNK && shown < ALL.length; k++, shown++) {
+    board.appendChild(makeCard(ALL[shown], shown + 1));
+  }
+  $('count').textContent = `${ALL.length} clip${ALL.length === 1 ? '' : 's'}`;
+  moreEl.textContent = shown >= ALL.length ? (ALL.length ? '— end —' : 'no clips on the wall') : '';
+}
+function resetRender() { board.innerHTML = ''; shown = 0; renderMore(); pump(); }
+
+// keep filling while the sentinel is near the viewport (covers short pages)
+function needsMore() { return sentinel.getBoundingClientRect().top < innerHeight + 600; }
+function pump() { while (shown < ALL.length && needsMore()) renderMore(); }
+new IntersectionObserver(es => { if (es[0].isIntersecting) pump(); }, { rootMargin: '600px' }).observe(sentinel);
+
+async function fetchAll() {
+  moreEl.textContent = 'loading…';
   try {
-    const { runs, nextPageToken } = await listPage(USE_EMULATOR, { pageToken: token, pageSize: 24 });
-    runs.forEach(card);
-    token = nextPageToken;
-    if (n === 0) { moreEl.textContent = 'no clips on the wall.'; done = true; }
-    else if (!token) { moreEl.textContent = `— ${n} clips total —`; done = true; }
-    else moreEl.textContent = '';
-  } catch (e) { moreEl.textContent = 'error: ' + (e.code || e.message); done = true; }
-  finally { loading = false; }
+    let token = null; ALL = [];
+    do {
+      const { runs, nextPageToken } = await listPage(USE_EMULATOR, { pageToken: token, pageSize: 1000 });
+      ALL.push(...runs); token = nextPageToken;
+    } while (token);
+    applySort(); resetRender();
+  } catch (e) { moreEl.textContent = 'error loading: ' + (e.code || e.message); }
 }
 
-let visible = false, pumping = false;
-async function pump() { if (pumping) return; pumping = true; while (visible && !loading && !done) await loadPage(); pumping = false; }
-new IntersectionObserver(es => { visible = es[0].isIntersecting; if (visible) pump(); }, { rootMargin: '500px' }).observe($('sentinel'));
-
-async function loadAll() { await loadPage(); pump(); }
+document.querySelectorAll('.sortbtn').forEach(b => b.onclick = () => {
+  sortMode = b.dataset.sort;
+  document.querySelectorAll('.sortbtn').forEach(x => x.classList.toggle('active', x === b));
+  applySort(); resetRender();
+});
 </script>
 </body>
 </html>
