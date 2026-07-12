@@ -5,6 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>AIRSLICE — slice fruit with your bare hands</title>
 <meta name="description" content="Slice flying fruit in mid-air with your BARE HANDS. Your webcam tracks your index finger — it becomes the blade. On-device AI hand tracking (LiteRT.js). No mouse, no mercy.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='88'%3E%F0%9F%8D%89%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<meta name="theme-color" content="#0a0a12">
+<!-- social share / unfurl -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AIRSLICE">
+<meta property="og:title" content="AIRSLICE — slice fruit with your bare hands">
+<meta property="og:description" content="Slice flying fruit in mid-air with your bare hands — your webcam is the controller. Runs 100% on-device in the browser.">
+<meta property="og:url" content="https://YOUR_DOMAIN/">
+<meta property="og:image" content="https://YOUR_DOMAIN/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="AIRSLICE — slice fruit with your bare hands">
+<meta name="twitter:description" content="Slice flying fruit in mid-air with your bare hands — your webcam is the controller.">
+<meta name="twitter:image" content="https://YOUR_DOMAIN/og.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Fragment+Mono&display=swap" rel="stylesheet">
@@ -97,6 +113,13 @@
     box-shadow: 0 10px 40px #000a; background: #000;
   }
   .btn.small { font-size: 19px; padding: 10px 22px; }
+  #name-input {
+    font-family: 'Fragment Mono', monospace; font-size: 13px; text-align: center;
+    width: 150px; padding: 10px 10px; border-radius: 11px;
+    background: #0a0a12; border: 1px solid #ffffff2c; color: #fff;
+  }
+  #name-input:focus { outline: none; border-color: var(--cyan); }
+  #name-input::placeholder { color: #667; }
   .consent {
     font-size: 9.5px; color: #778; letter-spacing: .08em;
     margin: 8px auto 0; max-width: 480px; line-height: 1.6;
@@ -133,6 +156,14 @@
   }
   #mute:hover, #wallbtn:hover { background: #000000aa; border-color: #ffffff44; }
   .hint-line { font-size: 11px; color: #778; margin-top: 18px; }
+  #legal { z-index: 40; }
+  .legal-card {
+    background: #12121ef2; border: 1px solid #ffffff1c; border-radius: 20px;
+    padding: 32px 34px; max-width: 460px; width: min(92vw, 460px);
+    box-shadow: 0 24px 80px #000c, 0 0 60px #b6ff2e22;
+  }
+  .legal-copy { font-size: 13px; color: #bcd; line-height: 1.7; margin: 14px 0 22px; }
+  .legal-copy b { color: #fff; font-weight: 400; }
 
   /* home leaderboard ("The Wall") — full, infinite-scroll, on the main page */
   .wall { margin-top: 26px; width: min(1000px, 92vw); }
@@ -228,6 +259,20 @@
 <button id="mute" title="sound">🔊</button>
 <a id="wallbtn" title="the wall — leaderboard" style="cursor:pointer">🏆</a>
 
+<!-- ============ FIRST-VISIT NOTICE (one click → home) ============ -->
+<div class="overlay" id="legal" style="display:none">
+  <div class="legal-card">
+    <div class="title" style="font-size:clamp(40px,9vw,88px)">AIR<span class="zap">SLICE</span></div>
+    <p class="legal-copy">
+      Quick heads-up: hand tracking runs <b>on your device</b> — your camera clip
+      stays private unless you tap <b>Post</b>. Posted clips (camera included)
+      appear on the public wall and you can remove them anytime. By playing you
+      confirm you're <b>13+</b> and it's all just for fun.
+    </p>
+    <button class="btn" id="legal-ok">GOT IT — PLAY ▸</button>
+  </div>
+</div>
+
 <!-- ============ BOOT ============ -->
 <div class="overlay" id="boot">
   <div>
@@ -282,6 +327,7 @@
     <div class="replaybox" id="replaybox" style="display:none">
       <video id="replay" playsinline loop muted autoplay></video>
       <div class="btnrow" style="margin-top:10px">
+        <input id="name-input" maxlength="12" autocomplete="off" spellcheck="false" placeholder="your name (optional)">
         <button class="btn pink small" id="upload"><span class="lbl">POST TO THE WALL 📼</span> <span class="dwell"></span></button>
         <a class="btn alt" id="dl" download="airslice-run.webm">save clip</a>
         <button class="btn alt" id="seewall">the wall 🏆</button>
@@ -290,7 +336,7 @@
     </div>
     <div class="btnrow">
       <button class="btn" id="again"><span class="lbl">AGAIN!</span> <span class="dwell"></span></button>
-      <button class="btn pink" id="brag"><span class="lbl">COPY BRAG 📋</span> <span class="dwell"></span></button>
+      <button class="btn pink" id="brag"><span class="lbl">SHARE 📤</span> <span class="dwell"></span></button>
     </div>
     <div class="hint-line" id="dwell-hint">✋ point at a button and hold your finger on it to press</div>
   </div>
@@ -497,6 +543,16 @@ function unlockAudio() {
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && AC && AC.state !== 'running') AC.resume().catch(() => {});
 });
+
+try { $('name-input').value = localStorage.getItem('airslice-name') || ''; } catch {}
+
+// first-visit notice: one click → dismissed forever, land on the home screen
+if (!localStorage.getItem('airslice-ok')) $('legal').style.display = '';
+$('legal-ok').onclick = () => {
+  try { localStorage.setItem('airslice-ok', '1'); } catch {}
+  $('legal').style.display = 'none';
+  audio(); if (!muted) music.start();   // the click is a gesture — kick ambient music too
+};
 
 // =====================================================================
 // Hand tracking (LiteRT.js) — same engine as the AIR·HAND demo
@@ -758,7 +814,9 @@ async function uploadRun() {
   try {
     const { st, storage, uid } = await getFirebase(USE_EMULATOR);
     if (!uid) throw new Error('sign-in unavailable');
-    const name = encodeRunName({ score: fs.score, sliced: fs.sliced, combo: fs.combo, ext });
+    const playerName = ($('name-input').value || '').trim();
+    try { localStorage.setItem('airslice-name', playerName); } catch {}
+    const name = encodeRunName({ score: fs.score, sliced: fs.sliced, combo: fs.combo, ext, name: playerName });
     const task = st.uploadBytesResumable(st.ref(storage, name), blob, {
       contentType: blob.type || 'video/webm',
       // clips never change → cache hard. Browsers (and any CDN/edge in front)
@@ -895,15 +953,19 @@ function endGame() {
   $('over').classList.remove('gone');
 }
 
-async function copyBrag() {
-  const txt = `🖐🍉 I sliced ${slicedTotal} fruits (${score} pts) IN MID-AIR with my bare hands in AIRSLICE — webcam slicing game, the AI runs 100% in your browser. Beat me: ${location.origin}${location.pathname}`;
+async function shareBrag() {
+  // one-tap share: the posted clip if there is one, else the game + your score
+  if (uploadedPath) { shareRun(uploadedPath, finalStats.score, null); return; }
+  const url = location.origin + location.pathname;
+  const text = `I sliced ${slicedTotal} fruits (${score} pts) with my bare hands in AIRSLICE 🖐🍉 — beat me:`;
   try {
-    if (navigator.share) await navigator.share({ text: txt });
-    else { await navigator.clipboard.writeText(txt); addPopup(W / 2, H / 2, 'COPIED! 📋', '#b6ff2e', 54); }
-  } catch {}
+    if (navigator.share) { await navigator.share({ title: 'AIRSLICE', text, url }); return; }
+  } catch { return; }
+  try { await navigator.clipboard.writeText(url); addPopup(W / 2, H / 2, 'LINK COPIED 📋', '#b6ff2e', 50); } catch {}
+  window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(url), '_blank', 'noopener');
 }
 $('again').onclick = () => { blip(660); startGame(); };
-$('brag').onclick = copyBrag;
+$('brag').onclick = shareBrag;
 
 // =====================================================================
 // End-run confirmation (keyboard + leaderboard icon)
@@ -1077,7 +1139,24 @@ function loop(now) {
 
   updateDwell(now);
   draw(now);
-  if (recCtx) recCtx.drawImage(canvas, 0, 0, recCanvas.width, recCanvas.height);
+  if (recCtx) {
+    recCtx.drawImage(canvas, 0, 0, recCanvas.width, recCanvas.height);
+    // watermark every recorded clip → free advertising when reshared
+    const W2 = recCanvas.width, H2 = recCanvas.height, pad = Math.round(W2 * 0.02);
+    const mark = CANON_HOST || location.hostname;   // config-driven so forks brand themselves
+    recCtx.textBaseline = 'bottom';
+    recCtx.font = `700 ${Math.round(W2 * 0.032)}px 'Fragment Mono', monospace`;
+    recCtx.textAlign = 'left';
+    recCtx.fillStyle = 'rgba(0,0,0,.55)';
+    recCtx.fillText(mark, pad + 1, H2 - pad + 1);
+    recCtx.fillStyle = '#b6ff2e';
+    recCtx.fillText(mark, pad, H2 - pad);
+    recCtx.textAlign = 'right';
+    recCtx.fillStyle = 'rgba(0,0,0,.55)';
+    recCtx.fillText(score + ' pts', W2 - pad + 1, H2 - pad + 1);
+    recCtx.fillStyle = '#29f4ff';
+    recCtx.fillText(score + ' pts', W2 - pad, H2 - pad);
+  }
 }
 
 // =====================================================================
@@ -1283,7 +1362,7 @@ function wallCard(r) {
     <div class="meta">
       <span class="rank">#${i}</span>
       <span class="pts">${r.score}<small> pts</small></span>
-      <span class="stats">${r.sliced} sliced<br>combo x${r.combo}</span>
+      <span class="stats">${r.player ? '@' + r.player + '<br>' : ''}${r.sliced} sliced · x${r.combo}</span>
     </div>`;
   const wrap = card.querySelector('.vidwrap');
   const pv = card.querySelector('video.preview');
@@ -1329,7 +1408,12 @@ function wallCard(r) {
 }
 
 function clipUrl(path) {
-  return `${location.origin}${location.pathname}?clip=${encodeURIComponent(path)}`;
+  // /c/<leaf> is server-rendered with OpenGraph tags (rich unfurls) and
+  // redirects humans to the in-app modal. Falls back to ?clip= on localhost.
+  const leaf = path.replace(/^runs\//, '');
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    return `${location.origin}/?clip=${encodeURIComponent(path)}`;
+  return `${location.origin}/c/${encodeURIComponent(leaf)}`;
 }
 function flashBtn(btn, txt) {
   if (!btn) return; const t = btn.textContent; btn.textContent = txt;
@@ -1340,11 +1424,13 @@ async function copyPermalink(path, btn) {
 }
 async function shareRun(path, score, btn) {
   const url = clipUrl(path);
-  const data = { title: 'AIRSLICE', text: `${score} pts on AIRSLICE 🍉 — slice fruit with your bare hands!`, url };
+  const text = `${score} pts on AIRSLICE 🍉 — slice fruit with your bare hands!`;
   try {
-    if (navigator.share) await navigator.share(data);
-    else { await navigator.clipboard.writeText(url); flashBtn(btn, 'link copied'); }
-  } catch { /* share sheet dismissed */ }
+    if (navigator.share) { await navigator.share({ title: 'AIRSLICE', text, url }); return; }
+  } catch { return; /* user dismissed the native sheet */ }
+  // desktop fallback: copy the link + open an X/Twitter intent in a new tab
+  try { await navigator.clipboard.writeText(url); flashBtn(btn, 'link copied'); } catch {}
+  window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(text) + '&url=' + encodeURIComponent(url), '_blank', 'noopener');
 }
 
 // ---- permalink viewer: open a single clip (from ?clip=, a card, or after posting) ----
@@ -1356,7 +1442,7 @@ async function openClip(path) {
   const p = parseRunName(leaf);
   currentClipScore = p ? p.score : 0;
   $('clip-score').textContent = p ? `${p.score} pts` : 'AIRSLICE clip';
-  $('clip-stats').textContent = p ? `${p.sliced} sliced · combo x${p.combo}` : '';
+  $('clip-stats').textContent = p ? `${p.player ? '@' + p.player + ' · ' : ''}${p.sliced} sliced · combo x${p.combo}` : '';
   try {
     const { st, storage } = await getFirebase(USE_EMULATOR);
     const url = await st.getDownloadURL(st.ref(storage, path));

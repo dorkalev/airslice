@@ -4,14 +4,17 @@
 // The webhook URL is a secret:  firebase functions:secrets:set NOTIFY_WEBHOOK_URL
 
 const { onObjectFinalized } = require("firebase-functions/v2/storage");
+const { onRequest } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
 const { logger } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
+const crypto = require("crypto");
 
 admin.initializeApp();
 
 const NOTIFY_WEBHOOK_URL = defineSecret("NOTIFY_WEBHOOK_URL");
 const BUCKET = "YOUR_PROJECT.firebasestorage.app";
+const CANONICAL = "https://YOUR_DOMAIN";
 const DAILY_CAP = 40;               // max posted runs per uploader per (UTC) day
 
 const bucket = () => admin.storage().bucket(BUCKET);
@@ -50,12 +53,13 @@ exports.notifyOnUpload = onObjectFinalized(
     }
 
     // ---- notify ----
-    const m = leaf.match(/^(\d{7})_(\d{13})_(\d+)f_x(\d+)\./);
+    const m = leaf.match(/^(\d{7})_(\d{13})_(\d+)f_x(\d+)(?:_n([a-z0-9]{1,12}))?\./);
     const score = m ? 9999999 - parseInt(m[1], 10) : "?";
     const sliced = m ? m[3] : "?";
     const combo = m ? m[4] : "?";
+    const who = m && m[5] ? ` by @${m[5]}` : "";
     const sizeMB = event.data.size ? (Number(event.data.size) / 1048576).toFixed(1) : "?";
-    const msg = `🍉 New AIRSLICE run posted: ${score} pts (${sliced} sliced, combo x${combo}) · ${sizeMB} MB`;
+    const msg = `🍉 New AIRSLICE run${who}: ${score} pts (${sliced} sliced, combo x${combo}) · ${sizeMB} MB`;
 
     const url = NOTIFY_WEBHOOK_URL.value();
     if (!url) { logger.warn("NOTIFY_WEBHOOK_URL is empty"); return; }
@@ -67,3 +71,58 @@ exports.notifyOnUpload = onObjectFinalized(
     } catch (e) { logger.error("webhook error", e); }
   }
 );
+
+// ---- rich link unfurls: /c/<runLeaf> serves OpenGraph HTML to crawlers and
+// redirects humans to the in-app clip modal. Media URLs are tokened download
+// URLs (crawler-fetchable, no App Check needed). ----
+async function mediaUrl(path) {
+  const file = bucket().file(path);
+  const [exists] = await file.exists();
+  if (!exists) return null;
+  const [meta] = await file.getMetadata();
+  let token = meta.metadata && meta.metadata.firebaseStorageDownloadTokens;
+  if (token) token = String(token).split(",")[0];
+  else { token = crypto.randomUUID(); await file.setMetadata({ metadata: { firebaseStorageDownloadTokens: token } }); }
+  return `https://firebasestorage.googleapis.com/v0/b/${BUCKET}/o/${encodeURIComponent(path)}?alt=media&token=${token}`;
+}
+
+exports.clipPage = onRequest({ region: "us-central1", memory: "256MiB" }, async (req, res) => {
+  const leaf = decodeURIComponent((req.path || "").replace(/^\/c\/?/, "").replace(/^\/+/, ""));
+  const appUrl = `${CANONICAL}/?clip=` + encodeURIComponent("runs/" + leaf);
+  const m = leaf.match(/^(\d{7})_(\d{13})_(\d+)f_x(\d+)(?:_n([a-z0-9]{1,12}))?\.(webm|mp4)$/);
+  if (!m) { res.redirect(302, CANONICAL); return; }
+
+  const score = 9999999 - parseInt(m[1], 10), sliced = m[3], combo = m[4];
+  const who = m[5] ? "@" + m[5] : "a player";
+  const base = leaf.replace(/\.[^.]+$/, "");
+  let posterUrl = null, clipMediaUrl = null;
+  try { [posterUrl, clipMediaUrl] = await Promise.all([mediaUrl(`posters/${base}.jpg`), mediaUrl(`runs/${leaf}`)]); }
+  catch (e) { logger.error("mediaUrl", e); }
+
+  const title = `${score} pts on AIRSLICE 🍉`;
+  const desc = `${who} sliced ${sliced} fruit (combo x${combo}) with their bare hands — think you can beat it?`;
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const vtype = m[6] === "mp4" ? "video/mp4" : "video/webm";
+
+  res.set("Cache-Control", "public, max-age=3600");
+  res.status(200).send(`<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(title)}</title>
+<meta name="description" content="${esc(desc)}">
+<meta property="og:type" content="video.other">
+<meta property="og:site_name" content="AIRSLICE">
+<meta property="og:title" content="${esc(title)}">
+<meta property="og:description" content="${esc(desc)}">
+<meta property="og:url" content="${CANONICAL}/c/${encodeURIComponent(leaf)}">
+${posterUrl ? `<meta property="og:image" content="${esc(posterUrl)}"><meta property="og:image:width" content="400"><meta property="og:image:height" content="300"><meta name="twitter:image" content="${esc(posterUrl)}">` : ""}
+${clipMediaUrl ? `<meta property="og:video" content="${esc(clipMediaUrl)}"><meta property="og:video:secure_url" content="${esc(clipMediaUrl)}"><meta property="og:video:type" content="${vtype}">` : ""}
+<meta name="twitter:card" content="${posterUrl ? "summary_large_image" : "summary"}">
+<meta name="twitter:title" content="${esc(title)}">
+<meta name="twitter:description" content="${esc(desc)}">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='88'%3E%F0%9F%8D%89%3C/text%3E%3C/svg%3E">
+<meta http-equiv="refresh" content="0; url=${esc(appUrl)}">
+</head><body style="background:#0a0a12;color:#fff;font-family:system-ui,sans-serif;text-align:center;padding:40px">
+<script>location.replace(${JSON.stringify(appUrl)})</script>
+<p>${esc(title)} — <a style="color:#29f4ff" href="${esc(appUrl)}">watch on AIRSLICE →</a></p>
+</body></html>`);
+});

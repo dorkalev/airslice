@@ -15,19 +15,23 @@ const MAX_SCORE = 9_999_999;
 const SCORE_PAD = 7;
 const TS_PAD = 13;
 
-// runs/<invScore7>_<ts13>_<sliced>f_x<combo>.<ext>
-export function encodeRunName({ score, sliced, combo, ext }) {
+// sanitize an optional player name to a path-safe token (or '')
+export const cleanName = (n) => (n || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
+
+// runs/<invScore7>_<ts13>_<sliced>f_x<combo>[_n<name>].<ext>
+export function encodeRunName({ score, sliced, combo, ext, name }) {
   const s = Math.max(0, Math.min(MAX_SCORE, score | 0));
   const inv = String(MAX_SCORE - s).padStart(SCORE_PAD, '0');
   const ts = String(Date.now()).padStart(TS_PAD, '0');
-  return `runs/${inv}_${ts}_${sliced | 0}f_x${combo | 0}.${ext}`;
+  const nm = cleanName(name);
+  return `runs/${inv}_${ts}_${sliced | 0}f_x${combo | 0}${nm ? '_n' + nm : ''}.${ext}`;
 }
 
 export function parseRunName(name) {
-  // ranked format only: <invScore7>_<ts13>_<sliced>f_x<combo>.<ext>
+  // ranked format only: <invScore7>_<ts13>_<sliced>f_x<combo>[_n<name>].<ext>
   // (older pre-launch test uploads use a different scheme and are ignored)
-  const m = name.match(/^(\d{7})_(\d{13})_(\d+)f_x(\d+)\./);
-  return m ? { score: MAX_SCORE - +m[1], sliced: +m[3], combo: +m[4], ts: +m[2] } : null;
+  const m = name.match(/^(\d{7})_(\d{13})_(\d+)f_x(\d+)(?:_n([a-z0-9]{1,12}))?\./);
+  return m ? { score: MAX_SCORE - +m[1], sliced: +m[3], combo: +m[4], ts: +m[2], player: m[5] || '' } : null;
 }
 
 let _fb = null;
